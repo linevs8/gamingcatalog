@@ -7,7 +7,9 @@ import {
   Archive, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BookOpen, Check,
   ChevronDown, ChevronRight, Cloud, CloudOff, ExternalLink, Gamepad2,
   GripVertical, LayoutDashboard, Library, Link2, List, Menu, MoreHorizontal,
-  Plus, Search, Settings2, Sparkles, Star, Trash2, X, PanelLeftClose
+  Plus, Search, Settings2, Sparkles, Star, Trash2, X, PanelLeftClose,
+  Swords, Trophy, Heart, Users, Flame, Target, Bookmark, MonitorPlay,
+  Crown, Clock3, Compass, Puzzle, Zap, CalendarDays, FolderOpen, Shield, Coffee
 } from "lucide-react";
 import {
   type Category, type Data, type Game, type QuickLink, emptyData,
@@ -16,13 +18,23 @@ import {
 
 type Modal = null | { type: "game" | "category" | "shelf" | "link" | "organize"; gameId?: string };
 const colors = ["#77A9F7", "#B39BFA", "#70C8BE", "#E8B878", "#F29BAD", "#96B6D1"];
-const icons = ["star", "gamepad", "book", "sparkle"];
+const icons = [
+  "star", "gamepad", "book", "sparkle", "swords", "trophy",
+  "heart", "users", "flame", "target", "bookmark", "monitor",
+  "crown", "clock", "compass", "puzzle", "zap", "calendar",
+  "folder", "shield", "coffee"
+];
 
+const categoryIcons = {
+  star: Star, gamepad: Gamepad2, book: BookOpen, sparkle: Sparkles,
+  swords: Swords, trophy: Trophy, heart: Heart, users: Users,
+  flame: Flame, target: Target, bookmark: Bookmark, monitor: MonitorPlay,
+  crown: Crown, clock: Clock3, compass: Compass, puzzle: Puzzle,
+  zap: Zap, calendar: CalendarDays, folder: FolderOpen, shield: Shield, coffee: Coffee
+};
 function LabelIcon({ name, size = 17 }: { name: string; size?: number }) {
-  if (name === "star") return <Star size={size}/>;
-  if (name === "book") return <BookOpen size={size}/>;
-  if (name === "sparkle") return <Sparkles size={size}/>;
-  return <Gamepad2 size={size}/>;
+  const IconComponent = categoryIcons[name as keyof typeof categoryIcons] || Gamepad2;
+  return <IconComponent size={size}/>;
 }
 function Cover({ game, className = "" }: { game?: Game; className?: string }) {
   const [broken, setBroken] = useState(false);
