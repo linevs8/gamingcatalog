@@ -35,7 +35,8 @@ button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visib
 .brand strong span { color: var(--accent); }
 .brand small { display: block; color: #7e97b7; white-space: nowrap; margin-top: 3px; font-size: 10px; }
 .sidebar-collapse { border: 0; background: transparent; color: #7390b2; padding: 5px; margin-left: auto; border-radius: 6px; }
-.sidebar.collapsed .sidebar-collapse { position: absolute; bottom: 4px; right: 8px; }
+.sidebar.collapsed .sidebar-collapse { position: absolute; bottom: 65px; left: 20px; right: auto; top: auto; color: #9bb8d9; background: #1d304b; width: 34px; height: 34px; border: 1px solid #334d6d; }
+.sidebar.collapsed .brand { position: static; }
 .nav { padding: 8px 11px; flex: 1; overflow-y: auto; min-height: 0; }
 .nav-label { color: #617e9f; letter-spacing: 1.8px; font-size: 10px; font-weight: 800; padding: 16px 13px 12px; }
 .nav-label-categories { display: flex; justify-content: space-between; align-items: center; margin-top: 24px; padding-bottom: 10px; }
@@ -154,7 +155,7 @@ h2 { margin: 0; }
 .settings-panel > label { display: flex; flex-direction: column; gap: 7px; font-size: 12px; color: #adbfda; }
 .settings-panel input, .settings-panel select { min-width: 200px; }
 .setting-caption { color: #9eb7d5; font-size: 11px; width: 100%; }
-.swatches, .icon-choices { display: flex; gap: 9px; align-items: center; }
+.swatches, .icon-choices { display: flex; flex-wrap: wrap; gap: 9px; align-items: center; }
 .swatch { width: 24px; height: 24px; border: 2px solid transparent; border-radius: 100%; box-shadow: 0 0 0 1px #ffffff17; }
 .swatch.chosen { border-color: #eff7ff; outline: 2px solid #7195bf; outline-offset: 2px; }
 .icon-choices button { color: #9ebce4; background: #203653; border: 1px solid #314e72; border-radius: 8px; width: 36px; height: 36px; display: grid; place-items: center; }
