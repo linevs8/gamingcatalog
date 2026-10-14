@@ -10,6 +10,7 @@ Instead of a forced backlog or "daily rotation" system, **you** create the categ
 
 - **Blank-slate dashboard** with attractive, whole-card clickable category previews (up to four top-ranked covers each).
 - **All Games Library** with search, Gallery/List layouts, manual game addition, optional cover URLs and category assignment.
+- **Create games from any category** with the category preselected, or add existing Library games from that category without leaving the page.
 - **Your own categories**, custom icons/colors, category location on Dashboard or in a Shelf, plus independent Gallery/List views.
 - **Multiple memberships:** A game can appear in many categories with one shared workspace and set of notes.
 - **Shelves** stay outside the main dashboard and contain categories (no deeper nesting).
