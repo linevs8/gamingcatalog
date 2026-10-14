@@ -24,10 +24,12 @@ export type Data = {
   shelves: Shelf[];
   memberships: Membership[];
   notes: Record<string, string>;
+  /** Optional for compatibility with existing saved guest libraries. */
+  noteTitles?: Record<string, string>;
   links: QuickLink[];
 };
 export const emptyData = (): Data => ({
-  version: 1, games: [], categories: [], shelves: [], memberships: [], notes: {}, links: []
+  version: 1, games: [], categories: [], shelves: [], memberships: [], notes: {}, noteTitles: {}, links: []
 });
 
 const DATABASE = "gaming-hq-local";
