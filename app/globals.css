@@ -180,6 +180,11 @@ h2 { margin: 0; }
 .workspace-section { border: 1px solid #2e4462; background: #152338; border-radius: 15px; padding: 22px; margin-bottom: 17px; }
 .section-head { display: flex; justify-content: space-between; align-items: center; gap: 15px; margin-bottom: 15px; }
 .section-head h2 { font-size: 17px; letter-spacing: -.3px; }
+.note-title-row { display:flex; align-items:center; gap:8px; min-width:0; }
+.note-title-row h2 { overflow-wrap:anywhere; }
+.note-title-control { display:grid; place-items:center; width:29px; height:29px; flex:0 0 auto; border:1px solid transparent; border-radius:7px; background:transparent; color:#92b2dc; }
+.note-title-control:hover { color:#eaf3ff; border-color:#3e5d82; background:#223958; }
+.note-title-input { min-width:0; width:min(360px,55vw); height:36px; border:1px solid #6298d8; outline:none; background:#0e1b2d; padding:6px 10px; border-radius:7px; color:#edf3ff; font-size:16px; font-weight:700; }
 .section-overline { color: #7e9cc0; font-size: 10px; letter-spacing: 1.4px; font-weight: 750; margin-bottom: 5px; }
 .save-indicator { color: #8fa8c7; display: flex; gap: 7px; align-items: center; font-size: 11px; white-space: nowrap; }
 .note-editor { resize: vertical; display: block; background: #101d30; color: #e6effb; line-height: 1.9; width: 100%; min-height: 240px; border: 1px solid #334861; border-radius: 10px; padding: 17px 19px; outline: none; }
