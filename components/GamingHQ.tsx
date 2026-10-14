@@ -74,6 +74,8 @@ export default function GamingHQ() {
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const expandSidebar = () => setSidebarOpen(true);
+  const closeSidebar = () => setSidebarOpen(false);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [openCategoryMenu, setOpenCategoryMenu] = useState(false);
   const [mobileMenu, setMobileMenu] = useState(false);
@@ -454,14 +456,39 @@ export default function GamingHQ() {
 
   return <div className="app-shell">
     <aside className={"sidebar "+(!sidebarOpen?"collapsed ":"")+(mobileMenu?"mobile-open":"")}>
-      <div className="brand"><div className="brand-icon"><Gamepad2 size={23}/></div>{sidebarOpen&&<div><strong>Gaming<span>HQ</span></strong><small>Your games, your space.</small></div>}
-        <button className="sidebar-collapse" title="Toggle sidebar" aria-label="Toggle sidebar" onClick={()=>setSidebarOpen(v=>!v)}><PanelLeftClose size={17}/></button>
+      <div className="brand">
+        {sidebarOpen ? (
+          <>
+            <div className="brand-icon"><Gamepad2 size={23}/></div>
+            <div className="brand-copy"><strong>Gaming<span>HQ</span></strong><small>Your games, your space.</small></div>
+            <button className="sidebar-collapse" type="button" title="Collapse sidebar" aria-label="Collapse sidebar" onClick={closeSidebar}>
+              <PanelLeftClose size={17}/>
+            </button>
+          </>
+        ) : (
+          <button className="brand-icon brand-expand" type="button" aria-label="Expand sidebar" title="Expand sidebar" onClick={expandSidebar}>
+            <Gamepad2 size={23}/>
+          </button>
+        )}
       </div>
       <nav className="nav">
         <div className="nav-label">WORKSPACE</div>
-        <Link className={"nav-item "+(section==="dashboard"?"nav-active":"")} href="/"><LayoutDashboard size={18}/>{sidebarOpen&&<span>Dashboard</span>}</Link>
-        <Link className={"nav-item "+(section==="library"?"nav-active":"")} href="/library"><Library size={18}/>{sidebarOpen&&<span>All Games</span>}</Link>
-        <Link className={"nav-item shelf-nav "+(section==="shelves"?"nav-active":"")} href="/shelves"><Archive size={18}/>{sidebarOpen&&<span>Shelves</span>}</Link>
+        {sidebarOpen ? (
+          <>
+            <Link className={"nav-item "+(section==="dashboard"?"nav-active":"")} href="/"><LayoutDashboard size={18}/><span>Dashboard</span></Link>
+            <Link className={"nav-item "+(section==="library"?"nav-active":"")} href="/library"><Library size={18}/><span>All Games</span></Link>
+            <Link className={"nav-item shelf-nav "+(section==="shelves"?"nav-active":"")} href="/shelves"><Archive size={18}/><span>Shelves</span></Link>
+          </>
+        ) : (
+          <>
+            <button type="button" className={"nav-item nav-expand "+(section==="dashboard"?"nav-active":"")}
+              aria-label="Expand sidebar for Dashboard" title="Expand sidebar · Dashboard" onClick={expandSidebar}><LayoutDashboard size={18}/></button>
+            <button type="button" className={"nav-item nav-expand "+(section==="library"?"nav-active":"")}
+              aria-label="Expand sidebar for All Games" title="Expand sidebar · All Games" onClick={expandSidebar}><Library size={18}/></button>
+            <button type="button" className={"nav-item nav-expand shelf-nav "+(section==="shelves"?"nav-active":"")}
+              aria-label="Expand sidebar for Shelves" title="Expand sidebar · Shelves" onClick={expandSidebar}><Archive size={18}/></button>
+          </>
+        )}
         {sidebarOpen&&<><div className="nav-label nav-label-categories">YOUR CATEGORIES
           <button title="New category" aria-label="New category" onClick={()=>openModal("category")}><Plus size={16}/></button></div>
           <div className="category-nav">{dashboardCategories.map((c,i)=><div key={c.id}>{CategoryRow({category:c,index:i,length:dashboardCategories.length})}</div>)}
@@ -472,7 +499,7 @@ export default function GamingHQ() {
     </aside>
     {mobileMenu&&<button className="mobile-overlay" aria-label="Close navigation" onClick={()=>setMobileMenu(false)}/>}
     <div className="main-shell">
-      <header className="topbar"><div className="topbar-left"><button className="icon-button mobile-toggle" onClick={()=>setMobileMenu(v=>!v)} aria-label="Open navigation"><Menu size={20}/></button>
+      <header className="topbar"><div className="topbar-left"><button className="icon-button mobile-toggle" onClick={()=>{setSidebarOpen(true);setMobileMenu(v=>!v);}} aria-label="Open navigation"><Menu size={20}/></button>
         <button className="icon-button" aria-label="Back" title="Back" onClick={()=>router.back()}><ArrowLeft size={19}/></button>
         <button className="icon-button" aria-label="Forward" title="Forward" onClick={()=>router.forward()}><ArrowRight size={19}/></button>
         <span className="topbar-divider"/><span className="topbar-location">{section==="dashboard"?"Dashboard":section==="library"?"Library":section==="shelves"?"Shelves":section==="category"?currentCategory?.name:currentGame?.title||"Gaming HQ"}</span></div>
