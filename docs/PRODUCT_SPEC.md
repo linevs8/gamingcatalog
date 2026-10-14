@@ -61,6 +61,7 @@ Library has **two related functions**, not one muddled search:
 - **All Games**: Search, browse, filter and organize games the user has ALREADY added. Gallery default and possible List toggle. Manual games work like database games.
 - **Add Game**: Search a game database, inspect results, choose correct release/title, then add to user's Library. Automatically populate cover, title and useful metadata when available.
 - A fully **manual/custom game** is always an option. Users may override any supplied title, cover or other metadata without losing the workspace.
+- Each expanded category directly supports **New game** (creates one master-Library entry automatically assigned to the current category) and **From Library** (adds or removes category membership for existing games without duplicating them or leaving the category).
 - A game added to Library need not be assigned to a category immediately.
 - Bulk category assignment in Library is desirable.
 - One unique user-library entry per chosen game identity. Prevent accidental duplicate additions and support intentional custom distinctions.
