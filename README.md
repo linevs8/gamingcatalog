@@ -13,7 +13,7 @@ Instead of a forced backlog or "daily rotation" system, **you** create the categ
 - **Your own categories**, custom icons/colors, category location on Dashboard or in a Shelf, plus independent Gallery/List views.
 - **Multiple memberships:** A game can appear in many categories with one shared workspace and set of notes.
 - **Shelves** stay outside the main dashboard and contain categories (no deeper nesting).
-- **Game workspaces** with immediately editable plain-text current notes and addable quick links.
+- **Game workspaces** with per-game renameable note headings (default "Where I left off"), immediately editable plain-text current notes and addable quick links.
 - **Browser Back/Forward** using real URLs; narrow expandable sidebar.
 - **Guest-first local autosaving** using IndexedDB (localStorage fallback if unavailable).
 
