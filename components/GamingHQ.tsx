@@ -461,7 +461,7 @@ export default function GamingHQ() {
           <>
             <div className="brand-icon"><Gamepad2 size={23}/></div>
             <div className="brand-copy"><strong>Gaming<span>HQ</span></strong><small>Your games, your space.</small></div>
-            <button className="sidebar-collapse" type="button" title="Collapse sidebar" aria-label="Collapse sidebar" onClick={closeSidebar}>
+            <button className="sidebar-collapse" type="button" title="Collapse sidebar" aria-label="Collapse sidebar" onClick={()=>{closeSidebar();setMobileMenu(false);}}>
               <PanelLeftClose size={17}/>
             </button>
           </>
