@@ -7,7 +7,7 @@ import {
   Archive, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BookOpen, Check,
   ChevronDown, ChevronRight, Cloud, CloudOff, ExternalLink, Gamepad2,
   GripVertical, LayoutDashboard, Library, Link2, List, Menu, MoreHorizontal,
-  Plus, Search, Settings2, Sparkles, Star, Trash2, X, PanelLeftClose,
+  Plus, Search, Settings2, Sparkles, Star, Trash2, X, PanelLeftClose, Pencil,
   Swords, Trophy, Heart, Users, Flame, Target, Bookmark, MonitorPlay,
   Crown, Clock3, Compass, Puzzle, Zap, CalendarDays, FolderOpen, Shield, Coffee
 } from "lucide-react";
@@ -78,6 +78,33 @@ export default function GamingHQ() {
   const [openCategoryMenu, setOpenCategoryMenu] = useState(false);
   const [mobileMenu, setMobileMenu] = useState(false);
   const [libraryView, setLibraryView] = useState<"gallery" | "list">("gallery");
+  const [editingNoteTitle, setEditingNoteTitle] = useState<string | null>(null);
+  const [noteTitleDraft, setNoteTitleDraft] = useState("");
+  const cancelNoteTitleSave = useRef(false);
+
+  const startEditingNoteTitle = (gameId: string) => {
+    cancelNoteTitleSave.current = false;
+    setNoteTitleDraft(data.noteTitles?.[gameId] || "Where I left off");
+    setEditingNoteTitle(gameId);
+  };
+  const commitNoteTitle = (gameId: string) => {
+    if (cancelNoteTitleSave.current) {
+      cancelNoteTitleSave.current = false;
+      return;
+    }
+    const title = noteTitleDraft.trim().slice(0, 80);
+    setData(previous => {
+      const noteTitles = { ...(previous.noteTitles || {}) };
+      if (title) noteTitles[gameId] = title;
+      else delete noteTitles[gameId];
+      return { ...previous, noteTitles };
+    });
+    setEditingNoteTitle(null);
+  };
+  const discardNoteTitleEdit = () => {
+    cancelNoteTitleSave.current = true;
+    setEditingNoteTitle(null);
+  };
 
   useEffect(() => {
     let live = true;
@@ -210,8 +237,9 @@ export default function GamingHQ() {
     if (!window.confirm("Remove this game from your Library? Its notes and links will be deleted. This cannot be undone.")) return;
     change(d => {
       const notes={...d.notes}; delete notes[id];
+      const noteTitles={...(d.noteTitles||{})}; delete noteTitles[id];
       return {...d, games:d.games.filter(g=>g.id!==id), memberships:d.memberships.filter(m=>m.gameId!==id),
-        links:d.links.filter(l=>l.gameId!==id), notes};
+        links:d.links.filter(l=>l.gameId!==id), notes, noteTitles};
     });
     setModal(null);
     go("/library");
@@ -371,7 +399,43 @@ export default function GamingHQ() {
           {!gameCategories.length&&<span className="muted small">Only in Library</span>}</div>
       </div><button className="secondary icon-square" title="Organize game" aria-label="Organize game" onClick={()=>openModal("organize",game.id)}><MoreHorizontal size={20}/></button></div>
       <section className="workspace-section note-section">
-        <div className="section-head"><div><div className="section-overline">CURRENT</div><h2>Where I left off</h2></div>
+        <div className="section-head"><div><div className="section-overline">CURRENT</div>
+          <div className="note-title-row">
+            {editingNoteTitle === game.id ? (
+              <>
+                <input
+                  className="note-title-input"
+                  aria-label="Notebook heading"
+                  value={noteTitleDraft}
+                  maxLength={80}
+                  autoFocus
+                  onChange={e => setNoteTitleDraft(e.target.value)}
+                  onBlur={() => commitNoteTitle(game.id)}
+                  onKeyDown={e => {
+                    if (e.key === "Enter") { e.preventDefault(); commitNoteTitle(game.id); }
+                    if (e.key === "Escape") { e.preventDefault(); discardNoteTitleEdit(); }
+                  }}
+                />
+                <button className="note-title-control" aria-label="Save notebook heading"
+                  title="Save title" onMouseDown={e=>e.preventDefault()} onClick={()=>commitNoteTitle(game.id)}>
+                  <Check size={16}/>
+                </button>
+                <button className="note-title-control" aria-label="Cancel heading edit"
+                  title="Cancel" onMouseDown={e=>e.preventDefault()} onClick={discardNoteTitleEdit}>
+                  <X size={16}/>
+                </button>
+              </>
+            ) : (
+              <>
+                <h2>{data.noteTitles?.[game.id] || "Where I left off"}</h2>
+                <button className="note-title-control" aria-label="Rename notebook heading"
+                  title="Rename this notebook title" onClick={()=>startEditingNoteTitle(game.id)}>
+                  <Pencil size={15}/>
+                </button>
+              </>
+            )}
+          </div>
+        </div>
           <div className="save-indicator">{saveStatus==="saving"?<><Cloud size={15}/> Saving…</>:saveStatus==="error"?<><CloudOff size={15}/> Could not save</>:<><Check size={15}/> Saved locally</>}</div></div>
         <textarea className="note-editor" value={data.notes[game.id]||""} spellCheck
           placeholder={"What did you last do in "+game.title+"?\n\nWhat's next? Anything worth remembering?"}
