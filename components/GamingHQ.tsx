@@ -298,7 +298,7 @@ export default function GamingHQ() {
         <button className="primary" onClick={()=>openModal("game")}><Plus size={17}/> Add a game</button>
       </div>:!filtered.length?<div className="empty-search">No games match “{query}”.</div>:
       <div className={libraryView==="gallery"?"games-grid":"games-list"}>
-        {filtered.map(g=><GameCard key={g.id} game={g} list={libraryView==="list"} organize/>)}
+        {filtered.map(g=><div key={g.id}>{GameCard({game:g,list:libraryView==="list",organize:true})}</div>)}
       </div>}
     </div>;
   }
@@ -343,7 +343,7 @@ export default function GamingHQ() {
         <p>Add a game to your Library, then choose this category in its three-dot Organize menu.</p>
         <button className="primary" onClick={()=>go("/library")}><Plus size={17}/> Browse your Library</button>
       </div>:<><div className="subtle-hint"><GripVertical size={15}/> Ranking follows the order you set. Use the sidebar arrows to reorder in this first slice; hold-and-drag comes next.</div>
-        <div className={category.view==="gallery"?"games-grid":"games-list"}>{games.map(g=><GameCard key={g.id} game={g} list={category.view==="list"} organize/>)}</div></>}
+        <div className={category.view==="gallery"?"games-grid":"games-list"}>{games.map(g=><div key={g.id}>{GameCard({game:g,list:category.view==="list",organize:true})}</div>)}</div></>}
     </div>;
   }
 
@@ -388,7 +388,7 @@ export default function GamingHQ() {
         <Link className={"nav-item shelf-nav "+(section==="shelves"?"nav-active":"")} href="/shelves"><Archive size={18}/>{sidebarOpen&&<span>Shelves</span>}</Link>
         {sidebarOpen&&<><div className="nav-label nav-label-categories">YOUR CATEGORIES
           <button title="New category" aria-label="New category" onClick={()=>openModal("category")}><Plus size={16}/></button></div>
-          <div className="category-nav">{dashboardCategories.map((c,i)=><CategoryRow key={c.id} category={c} index={i} length={dashboardCategories.length}/>)}
+          <div className="category-nav">{dashboardCategories.map((c,i)=><div key={c.id}>{CategoryRow({category:c,index:i,length:dashboardCategories.length})}</div>)}
             {!dashboardCategories.length&&<div className="nav-empty">Your categories will appear here.</div>}
           </div></>}
       </nav>
@@ -403,9 +403,9 @@ export default function GamingHQ() {
         <div className="topbar-right"><span className="guest-chip"><Cloud size={14}/> Guest workspace</span><button className="icon-button" title="Settings coming later" aria-label="Settings coming later" disabled><Settings2 size={18}/></button></div>
       </header>
       <main className="main-content">{!ready?<div className="loading"><span className="pulse-dot"/> Opening your space…</div>:
-        section==="dashboard"?<Dashboard/>:section==="library"?<LibraryScreen/>:section==="shelves"?<ShelvesScreen/>:
-        section==="category"&&currentCategory?<CategoryScreen category={currentCategory}/>:
-        section==="game"&&currentGame?<GameScreen game={currentGame}/>:
+        section==="dashboard"?Dashboard():section==="library"?LibraryScreen():section==="shelves"?ShelvesScreen():
+        section==="category"&&currentCategory?CategoryScreen({category:currentCategory}):
+        section==="game"&&currentGame?GameScreen({game:currentGame}):
         <div className="blank-state"><h2>Couldn't find that page.</h2><button className="primary" onClick={()=>go("/")}>Back to dashboard</button></div>}
       </main>
     </div>
