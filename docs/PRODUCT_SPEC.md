@@ -115,6 +115,7 @@ Hide infrequent settings here without burying obvious actions:
 ## 10. Game workspace — AGREED
 
 - One shared game workspace wherever that game appears.
+- The primary notebook heading defaults to **"Where I left off"** but is directly renameable per game. Empty titles revert to default; existing game notes and other categories are unaffected.
 - **Current** page by default with immediately editable, continuous **Notepad** and prominent **Quick Links** area. Do not force users to create blocks or press Save before typing.
 - Minimal rich text: bold, italic, underline, headings, preset text colors, bulleted and numbered lists, checkboxes, hyperlinks.
 - Ctrl+Z/redo must be reliable, with a separate sensible recovery mechanism for previous note content beyond a closed tab. Persist drafts/autosave without claiming success prematurely.
