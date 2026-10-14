@@ -16,7 +16,7 @@ import {
   loadData, makeId, notePreview, saveData, validCover
 } from "@/lib/data";
 
-type Modal = null | { type: "game" | "category" | "shelf" | "link" | "organize"; gameId?: string };
+type Modal = null | { type: "game" | "category" | "shelf" | "link" | "organize" | "pick-library"; gameId?: string; categoryId?: string };
 const colors = ["#77A9F7", "#B39BFA", "#70C8BE", "#E8B878", "#F29BAD", "#96B6D1"];
 const icons = [
   "star", "gamepad", "book", "sparkle", "swords", "trophy",
@@ -80,6 +80,7 @@ export default function GamingHQ() {
   const [openCategoryMenu, setOpenCategoryMenu] = useState(false);
   const [mobileMenu, setMobileMenu] = useState(false);
   const [libraryView, setLibraryView] = useState<"gallery" | "list">("gallery");
+  const [pickerQuery, setPickerQuery] = useState("");
   const [editingNoteTitle, setEditingNoteTitle] = useState<string | null>(null);
   const [noteTitleDraft, setNoteTitleDraft] = useState("");
   const cancelNoteTitleSave = useRef(false);
@@ -145,10 +146,12 @@ export default function GamingHQ() {
     .map(m => data.games.find(g => g.id === m.gameId))
     .filter((g): g is Game => Boolean(g));
   const membershipsFor = (id: string) => data.memberships.filter(m => m.gameId === id);
-  const openModal = (type: NonNullable<Modal>["type"], gameId?: string) => {
+  const openModal = (type: NonNullable<Modal>["type"], gameId?: string, categoryId?: string) => {
     setName(""); setSubtitle(""); setCoverUrl(""); setLinkUrl(""); setLinkName("");
-    setTargetCategory(""); setCategoryColor(colors[0]); setCategoryIcon(icons[0]);
-    setError(""); setModal({ type, gameId });
+    setTargetCategory(type === "game" ? categoryId || "" : "");
+    setPickerQuery("");
+    setCategoryColor(colors[0]); setCategoryIcon(icons[0]);
+    setError(""); setModal({ type, gameId, categoryId });
   };
   const addGame = () => {
     const title = name.trim();
@@ -367,7 +370,13 @@ export default function GamingHQ() {
       <div className="breadcrumbs"><Link href="/">Dashboard</Link><ChevronRight size={14}/><span>{category.name}</span></div>
       <div className="page-top"><div className="category-title"><span className="title-icon" style={{color:category.color,background:category.color+"18"}}><LabelIcon name={category.icon} size={26}/></span>
         <div><h1>{category.name}<span className="dot">.</span></h1><p className="subline">{games.length} {games.length===1?"game":"games"} · Your order</p></div></div>
-        <div className="page-actions"><button className="secondary" onClick={()=>go("/library")}><Plus size={16}/> Find games</button>
+        <div className="page-actions">
+          <button className="secondary" onClick={()=>openModal("pick-library",undefined,category.id)}>
+            <Library size={16}/> From Library
+          </button>
+          <button className="primary" onClick={()=>openModal("game",undefined,category.id)}>
+            <Plus size={16}/> New game
+          </button>
           <div className="segment"><button className={category.view==="gallery"?"selected":""} onClick={()=>setCategory(category.id,{view:"gallery"})} aria-label="Gallery view"><LayoutDashboard size={17}/></button>
           <button className={category.view==="list"?"selected":""} onClick={()=>setCategory(category.id,{view:"list"})} aria-label="List view"><List size={17}/></button></div>
           <button className="secondary icon-square" aria-label="Category settings" title="Category settings" onClick={()=>setOpenCategoryMenu(v=>!v)}><MoreHorizontal size={20}/></button>
@@ -382,8 +391,15 @@ export default function GamingHQ() {
         <button className="danger-text" onClick={()=>removeCategory(category.id)}><Trash2 size={16}/> Delete category (keep games)</button>
       </div>}
       {!games.length?<div className="blank-state compact"><div className="blank-symbol"><Gamepad2 size={30}/></div><h2>Nothing here yet.</h2>
-        <p>Add a game to your Library, then choose this category in its three-dot Organize menu.</p>
-        <button className="primary" onClick={()=>go("/library")}><Plus size={17}/> Browse your Library</button>
+        <p>Create a new game right here, or choose one you've already added to your Library.</p>
+        <div className="empty-category-actions">
+          <button className="primary" onClick={()=>openModal("game",undefined,category.id)}>
+            <Plus size={17}/> Create a game
+          </button>
+          <button className="secondary" onClick={()=>openModal("pick-library",undefined,category.id)}>
+            <Library size={17}/> From Library
+          </button>
+        </div>
       </div>:<><div className="subtle-hint"><GripVertical size={15}/> Ranking follows the order you set. Use the sidebar arrows to reorder in this first slice; hold-and-drag comes next.</div>
         <div className={category.view==="gallery"?"games-grid":"games-list"}>{games.map(g=><div key={g.id}>{GameCard({game:g,list:category.view==="list",organize:true})}</div>)}</div></>}
     </div>;
@@ -515,7 +531,7 @@ export default function GamingHQ() {
     {modal&&<div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setModal(null)}}>
       <div className="dialog" role="dialog" aria-modal="true" aria-label={modal.type==="organize"?"Organize game":"Add new item"}>
         <div className="dialog-head"><h2>{modal.type==="game"?"Add a game":modal.type==="category"?"New category":modal.type==="shelf"?"New shelf":
-          modal.type==="link"?"Add quick link":"Organize game"}</h2><button className="icon-button" title="Close" onClick={()=>setModal(null)}><X size={20}/></button></div>
+          modal.type==="link"?"Add quick link":modal.type==="pick-library"?"Add from Library":"Organize game"}</h2><button className="icon-button" title="Close" onClick={()=>setModal(null)}><X size={20}/></button></div>
         {modal.type==="game"&&<div className="dialog-fields"><p className="muted small">Manual entry for now. Automatic game search is planned next.</p>
           <label>Game title<input autoFocus value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Kingdom Hearts Final Mix"/></label>
           <label>Subtitle / details <span className="muted">(optional)</span><input value={subtitle} onChange={e=>setSubtitle(e.target.value)} placeholder="e.g. PlayStation 2 · Action RPG"/></label>
@@ -531,6 +547,31 @@ export default function GamingHQ() {
           <p className="muted small">You can move existing categories into this shelf from their category settings.</p></div>}
         {modal.type==="link"&&<div className="dialog-fields"><label>URL<input autoFocus value={linkUrl} onChange={e=>setLinkUrl(e.target.value)} placeholder="https://…"/></label>
           <label>Title <span className="muted">(optional)</span><input value={linkName} onChange={e=>setLinkName(e.target.value)} placeholder="e.g. Walkthrough"/></label></div>}
+        {modal.type==="pick-library"&&<div className="dialog-fields">
+          <p className="muted small">Choose games for {data.categories.find(c=>c.id===modal.categoryId)?.name || "this category"}. Already-added games remain in your Library and any other categories.</p>
+          <label>Search your games
+            <input type="search" autoFocus value={pickerQuery} onChange={e=>setPickerQuery(e.target.value)}
+              placeholder="Search titles in your Library…"/>
+          </label>
+          <div className="library-picker">
+            {data.games.filter(game=>game.title.toLowerCase().includes(pickerQuery.trim().toLowerCase()))
+              .sort((a,b)=>a.title.localeCompare(b.title)).map(game=>{
+                const included=data.memberships.some(m=>m.gameId===game.id&&m.categoryId===modal.categoryId);
+                return <label className="library-picker-item" key={game.id}>
+                  <input type="checkbox" checked={included}
+                    onChange={e=>toggleMembership(game.id,modal.categoryId||"",e.target.checked)}/>
+                  <span className="library-picker-title">{game.title}</span>
+                  {included&&<Check size={15} className="picker-check"/>}
+                </label>;
+              })}
+            {!data.games.length?<p className="muted small">Your Library is empty. Create your first game here.</p>:
+              !data.games.some(g=>g.title.toLowerCase().includes(pickerQuery.trim().toLowerCase()))?
+              <p className="muted small">No games match that search.</p>:null}
+          </div>
+          <button className="secondary" onClick={()=>openModal("game",undefined,modal.categoryId)}>
+            <Plus size={16}/> Create a new game instead
+          </button>
+        </div>}
         {modal.type==="organize"&&<div className="dialog-fields">
           <p className="muted small">{data.games.find(g=>g.id===modal.gameId)?.title} can appear in multiple categories. All changes are saved locally.</p>
           <div className="organize-checks">{data.categories.map(c=><label key={c.id}><input type="checkbox"
@@ -541,8 +582,9 @@ export default function GamingHQ() {
           <button className="danger-text" onClick={()=>removeGame(modal.gameId||"")}><Trash2 size={16}/> Remove from Library and delete notes</button>
         </div>}
         {error&&<p role="alert" className="field-error">{error}</p>}
-        <div className="dialog-footer"><button className="secondary" onClick={()=>setModal(null)}>{modal.type==="organize"?"Done":"Cancel"}</button>
-          {modal.type!=="organize"&&<button className="primary" onClick={modal.type==="game"?addGame:modal.type==="category"?addCategory:modal.type==="shelf"?addShelf:addLink}>
+        <div className="dialog-footer"><button className="secondary" onClick={()=>setModal(null)}>
+          {modal.type==="organize"||modal.type==="pick-library"?"Done":"Cancel"}</button>
+          {modal.type!=="organize"&&modal.type!=="pick-library"&&<button className="primary" onClick={modal.type==="game"?addGame:modal.type==="category"?addCategory:modal.type==="shelf"?addShelf:addLink}>
             <Plus size={16}/>{modal.type==="game"?"Add game":modal.type==="category"?"Create category":modal.type==="shelf"?"Create shelf":"Add link"}</button>}</div>
       </div>
     </div>}
