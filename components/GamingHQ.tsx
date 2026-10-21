@@ -842,7 +842,7 @@ export default function GamingHQ() {
         <div className="blank-state"><h2>Couldn't find that page.</h2><button className="primary" onClick={()=>go("/")}>Back to dashboard</button></div>}
       </main>
     </div>
-    {(accountOpen||account.phase==="choose"||account.phase==="conflict"||account.phase==="loading")&&
+    {(accountOpen||account.phase==="choose"||account.phase==="loading")&&
       <AccountDialog account={account} onClose={()=>setAccountOpen(false)}/>}
     {showPreferences&&<div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setShowPreferences(false);}}>
       <div className="dialog preferences-dialog" role="dialog" aria-modal="true" aria-label="Gaming HQ preferences">
