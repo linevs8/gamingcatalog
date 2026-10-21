@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import RichNotes from "@/components/RichNotes";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Archive, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BookOpen, Check,
@@ -13,7 +14,7 @@ import {
 } from "lucide-react";
 import {
   type Category, type Data, type Game, type QuickLink, emptyData,
-  loadData, makeId, notePreview, saveData, validCover
+  loadData, makeId, notePreview, saveData, validCover, validateImport, type ThemeName
 } from "@/lib/data";
 
 type Modal = null | { type: "game" | "category" | "shelf" | "link" | "organize" | "pick-library"; gameId?: string; categoryId?: string };
@@ -81,6 +82,10 @@ export default function GamingHQ() {
   const [mobileMenu, setMobileMenu] = useState(false);
   const [libraryView, setLibraryView] = useState<"gallery" | "list">("gallery");
   const [pickerQuery, setPickerQuery] = useState("");
+  const [noteSelection,setNoteSelection] = useState<Record<string,string>>({});
+  const backupInputRef = useRef<HTMLInputElement>(null);
+  const [showPreferences,setShowPreferences] = useState(false);
+  const [backupMessage,setBackupMessage] = useState("");
   const [editingNoteTitle, setEditingNoteTitle] = useState<string | null>(null);
   const [noteTitleDraft, setNoteTitleDraft] = useState("");
   const cancelNoteTitleSave = useRef(false);
@@ -238,13 +243,53 @@ export default function GamingHQ() {
     setOpenCategoryMenu(false);
     go("/");
   };
+  const addNotePage = (gameId: string) => {
+    const name = window.prompt("Name your new notes page:", "New page")?.trim();
+    if (!name) return;
+    const id = makeId();
+    change(d => ({...d, notePages: {...(d.notePages||{}),
+      [gameId]: [...(d.notePages?.[gameId]||[]), {id,title:name.slice(0,80),content:"",order:(d.notePages?.[gameId]||[]).length}]
+    }}));
+    setNoteSelection(p=>({...p,[gameId]:id}));
+  };
+  const deleteNotePage = (gameId: string,pageId: string) => {
+    if (!window.confirm("Delete this notes page and its contents? The main notes page won't be affected.")) return;
+    change(d=>({...d,notePages:{...(d.notePages||{}),[gameId]:(d.notePages?.[gameId]||[]).filter(p=>p.id!==pageId)}}));
+    setNoteSelection(p=>({...p,[gameId]:"current"}));
+  };
+  const renameNotePage = (gameId:string,pageId:string,currentName:string) => {
+    const name=window.prompt("Rename notes page:",currentName)?.trim().slice(0,80);
+    if (!name) return;
+    change(d=>({...d,notePages:{...(d.notePages||{}),[gameId]:(d.notePages?.[gameId]||[]).map(p=>p.id===pageId?{...p,title:name}:p)}}));
+  };
+  const exportBackup = () => {
+    const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");a.href=url;a.download="gaming-hq-backup-"+new Date().toISOString().slice(0,10)+".json";a.click();
+    window.setTimeout(()=>URL.revokeObjectURL(url),2000);
+    setBackupMessage("Backup downloaded. Keep it somewhere safe.");
+  };
+  const importBackup = async (file: File) => {
+    try {
+      if (file.size > 25_000_000) throw new Error("Backup file is too large.");
+      const imported=validateImport(JSON.parse(await file.text()));
+      if (!window.confirm("REPLACE this browser's Gaming HQ library with the imported backup? Export your current library first. This cannot be undone.")) return;
+      await saveData(imported);
+      setData(imported);
+      setBackupMessage("Backup imported successfully.");
+      go("/");
+    } catch(e) {
+      setBackupMessage(e instanceof Error?e.message:"Couldn't import that backup.");
+    } finally { if(backupInputRef.current)backupInputRef.current.value=""; }
+  };
   const removeGame = (id: string) => {
     if (!window.confirm("Remove this game from your Library? Its notes and links will be deleted. This cannot be undone.")) return;
     change(d => {
       const notes={...d.notes}; delete notes[id];
       const noteTitles={...(d.noteTitles||{})}; delete noteTitles[id];
+      const notePages={...(d.notePages||{})}; delete notePages[id];
       return {...d, games:d.games.filter(g=>g.id!==id), memberships:d.memberships.filter(m=>m.gameId!==id),
-        links:d.links.filter(l=>l.gameId!==id), notes, noteTitles};
+        links:d.links.filter(l=>l.gameId!==id), notes, noteTitles,notePages};
     });
     setModal(null);
     go("/library");
@@ -417,48 +462,67 @@ export default function GamingHQ() {
           {!gameCategories.length&&<span className="muted small">Only in Library</span>}</div>
       </div><button className="secondary icon-square" title="Organize game" aria-label="Organize game" onClick={()=>openModal("organize",game.id)}><MoreHorizontal size={20}/></button></div>
       <section className="workspace-section note-section">
-        <div className="section-head"><div><div className="section-overline">CURRENT</div>
-          <div className="note-title-row">
-            {editingNoteTitle === game.id ? (
-              <>
-                <input
-                  className="note-title-input"
-                  aria-label="Notebook heading"
-                  value={noteTitleDraft}
-                  maxLength={80}
-                  autoFocus
-                  onChange={e => setNoteTitleDraft(e.target.value)}
-                  onBlur={() => commitNoteTitle(game.id)}
-                  onKeyDown={e => {
-                    if (e.key === "Enter") { e.preventDefault(); commitNoteTitle(game.id); }
-                    if (e.key === "Escape") { e.preventDefault(); discardNoteTitleEdit(); }
-                  }}
-                />
-                <button className="note-title-control" aria-label="Save notebook heading"
-                  title="Save title" onMouseDown={e=>e.preventDefault()} onClick={()=>commitNoteTitle(game.id)}>
-                  <Check size={16}/>
-                </button>
-                <button className="note-title-control" aria-label="Cancel heading edit"
-                  title="Cancel" onMouseDown={e=>e.preventDefault()} onClick={discardNoteTitleEdit}>
-                  <X size={16}/>
-                </button>
-              </>
-            ) : (
-              <>
-                <h2>{data.noteTitles?.[game.id] || "Where I left off"}</h2>
-                <button className="note-title-control" aria-label="Rename notebook heading"
-                  title="Rename this notebook title" onClick={()=>startEditingNoteTitle(game.id)}>
-                  <Pencil size={15}/>
-                </button>
-              </>
-            )}
-          </div>
+        <div className="note-page-tabs" role="tablist" aria-label="Notes pages">
+          <button type="button" role="tab" aria-selected={!noteSelection[game.id]||noteSelection[game.id]==="current"}
+            className={!noteSelection[game.id]||noteSelection[game.id]==="current"?"selected":""}
+            onClick={()=>setNoteSelection(p=>({...p,[game.id]:"current"}))}>Current</button>
+          {(data.notePages?.[game.id]||[]).sort((a,b)=>a.order-b.order).map(page=>
+            <button key={page.id} role="tab" aria-selected={noteSelection[game.id]===page.id}
+              className={noteSelection[game.id]===page.id?"selected":""}
+              onClick={()=>setNoteSelection(p=>({...p,[game.id]:page.id}))}>{page.title}</button>
+          )}
+          <button className="add-note-page" type="button" onClick={()=>addNotePage(game.id)} title="New notes page">
+            <Plus size={15}/> Add page
+          </button>
         </div>
-          <div className="save-indicator">{saveStatus==="saving"?<><Cloud size={15}/> Saving…</>:saveStatus==="error"?<><CloudOff size={15}/> Could not save</>:<><Check size={15}/> Saved locally</>}</div></div>
-        <textarea className="note-editor" value={data.notes[game.id]||""} spellCheck
-          placeholder={"What did you last do in "+game.title+"?\n\nWhat's next? Anything worth remembering?"}
-          onChange={e=>{const value=e.target.value; change(d=>({...d,notes:{...d.notes,[game.id]:value}}));}}/>
-        <div className="editor-foot">Just start typing · Ctrl+Z to undo · More formatting coming in the rich-text milestone</div>
+        <div className="section-head">
+          <div><div className="section-overline">{!noteSelection[game.id]||noteSelection[game.id]==="current"?"CURRENT":"NOTES PAGE"}</div>
+            {!noteSelection[game.id]||noteSelection[game.id]==="current"?
+              <div className="note-title-row">
+                {editingNoteTitle === game.id ? (
+                  <>
+                    <input className="note-title-input" aria-label="Notebook heading"
+                      value={noteTitleDraft} maxLength={80} autoFocus
+                      onChange={e=>setNoteTitleDraft(e.target.value)}
+                      onBlur={()=>commitNoteTitle(game.id)}
+                      onKeyDown={e=>{
+                        if(e.key==="Enter"){e.preventDefault();commitNoteTitle(game.id);}
+                        if(e.key==="Escape"){e.preventDefault();discardNoteTitleEdit();}
+                      }}/>
+                    <button className="note-title-control" title="Save title" aria-label="Save notebook heading"
+                      onMouseDown={e=>e.preventDefault()} onClick={()=>commitNoteTitle(game.id)}><Check size={16}/></button>
+                    <button className="note-title-control" title="Cancel" aria-label="Cancel heading edit"
+                      onMouseDown={e=>e.preventDefault()} onClick={discardNoteTitleEdit}><X size={16}/></button>
+                  </>
+                ):<>
+                  <h2>{data.noteTitles?.[game.id]||"Where I left off"}</h2>
+                  <button className="note-title-control" aria-label="Rename notebook heading"
+                    title="Rename this notebook title" onClick={()=>startEditingNoteTitle(game.id)}><Pencil size={15}/></button>
+                </>}
+              </div>:
+              <div className="note-title-row">
+                <h2>{data.notePages?.[game.id]?.find(p=>p.id===noteSelection[game.id])?.title||"Notes"}</h2>
+                <button className="note-title-control" aria-label="Rename notes page"
+                  onClick={()=>{
+                    const p=data.notePages?.[game.id]?.find(p=>p.id===noteSelection[game.id]);
+                    if(p)renameNotePage(game.id,p.id,p.title);
+                  }}><Pencil size={15}/></button>
+                <button className="note-title-control" aria-label="Delete notes page"
+                  onClick={()=>deleteNotePage(game.id,noteSelection[game.id])}><Trash2 size={15}/></button>
+              </div>
+            }
+          </div>
+          <div className="save-indicator">{saveStatus==="saving"?<><Cloud size={15}/> Saving…</>:
+            saveStatus==="error"?<><CloudOff size={15}/> Could not save</>:<><Check size={15}/> Saved locally</>}</div>
+        </div>
+        {(!noteSelection[game.id]||noteSelection[game.id]==="current")?
+          <RichNotes key={game.id+":current"} note={data.notes[game.id]||""}
+            onChange={html=>change(d=>({...d,notes:{...d.notes,[game.id]:html}}))}/>:
+          <RichNotes key={game.id+":"+noteSelection[game.id]}
+            note={data.notePages?.[game.id]?.find(p=>p.id===noteSelection[game.id])?.content||""}
+            onChange={html=>change(d=>({...d,notePages:{...(d.notePages||{}),
+              [game.id]:(d.notePages?.[game.id]||[]).map(p=>p.id===noteSelection[game.id]?{...p,content:html}:p)}}))}/>
+        }
       </section>
       <section className="workspace-section links-section"><div className="section-head"><div><div className="section-overline">TOOLS</div><h2>Quick links</h2></div>
         <button className="secondary small-button" onClick={()=>openModal("link",game.id)}><Plus size={16}/> Add link</button></div>
