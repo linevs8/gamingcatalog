@@ -71,3 +71,7 @@ Official documentation: https://api-docs.igdb.com/
 - Test rich-text undo/redo, recovery, multi-tab edits, back-forward, responsive/mobile touch, accessibility, large-library performance.
 - Configure Supabase per-user ownership/RLS and migration; never equate GitHub/Vercel deployment with secure user storage.
 - Keep code changes in reviewable branches and document any departures from Product Spec.
+
+## Milestone status (Oct 21, 2026)
+
+Rich text via Tiptap 2, DnD Kit 6/10 with a shared pure organization data layer, and JSON data export/import are now implemented in the feature branch. Automated unit tests preserve multiple category memberships on moves and protect notes from category deletion. The automated build runs `npm run lint`, `npm run test`, `npm run build`. Cloud auth, automatic cover lookup/metadata and deployment Git linking remain deferred until configured. Preview URLs have distinct browser storage; tell testers to use backup import/export.

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import GamingHQ from "@/components/GamingHQ";
 
 export const metadata: Metadata = {
   title: "Gaming HQ — Your games, your space",
@@ -7,5 +8,5 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
-  return <html lang="en"><body>{children}</body></html>;
+  return <html lang="en"><body><GamingHQ />{children}</body></html>;
 }

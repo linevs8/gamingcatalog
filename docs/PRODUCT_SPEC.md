@@ -1,7 +1,7 @@
 # Gaming HQ — Master Product & Design Specification
 
-**Version:** 1.1 — October 13, 2026  
-**Status:** Planning complete for first interactive milestone; **application code not yet started**.  
+**Version:** 1.2 — October 21, 2026  
+**Status:** Local-first prototype implemented on GitHub; automated and browser QA ongoing. Not a cloud-synced release.  
 **Repository:** https://github.com/linevs8/gamingcatalog  
 **Purpose:** Source of truth across ChatGPT chats, implementation branches and reviews.
 
@@ -61,6 +61,7 @@ Library has **two related functions**, not one muddled search:
 - **All Games**: Search, browse, filter and organize games the user has ALREADY added. Gallery default and possible List toggle. Manual games work like database games.
 - **Add Game**: Search a game database, inspect results, choose correct release/title, then add to user's Library. Automatically populate cover, title and useful metadata when available.
 - A fully **manual/custom game** is always an option. Users may override any supplied title, cover or other metadata without losing the workspace.
+- Each expanded category directly supports **New game** (creates one master-Library entry automatically assigned to the current category) and **From Library** (adds or removes category membership for existing games without duplicating them or leaving the category).
 - A game added to Library need not be assigned to a category immediately.
 - Bulk category assignment in Library is desirable.
 - One unique user-library entry per chosen game identity. Prevent accidental duplicate additions and support intentional custom distinctions.
@@ -115,6 +116,7 @@ Hide infrequent settings here without burying obvious actions:
 ## 10. Game workspace — AGREED
 
 - One shared game workspace wherever that game appears.
+- The primary notebook heading defaults to **"Where I left off"** but is directly renameable per game. Empty titles revert to default; existing game notes and other categories are unaffected.
 - **Current** page by default with immediately editable, continuous **Notepad** and prominent **Quick Links** area. Do not force users to create blocks or press Save before typing.
 - Minimal rich text: bold, italic, underline, headings, preset text colors, bulleted and numbered lists, checkboxes, hyperlinks.
 - Ctrl+Z/redo must be reliable, with a separate sensible recovery mechanism for previous note content beyond a closed tab. Persist drafts/autosave without claiming success prematurely.
@@ -172,3 +174,7 @@ Potential later additions: 'What should I play?' picker; session snapshots; game
 **Change log**
 - v1.0 — Original shared design specification compiled after planning conversation.
 - v1.1 — Correct actual repository; approved separate All Games and Add Game library experiences; approved blank first visit; retained technical decisions as pending validation.
+
+## 16. Local-first milestone implementation (October 21, 2026)
+
+Aims for a cohesive usable local-first baseline without pretending backend credentials or account systems exist. Implemented on the development branch: rich-text Current notes, optional named pages, manual checkpoints/restores, edit game metadata and quick links, guest backup import/export, themes, game/category drag-and-drop with Undo, named shelf targets, safe shelf renaming/deletion, direct New Game/From Library in categories, expanded icon palette. Next: real-provider licensing/credentials, secure authentication, cross-device sync and deeper real-browser regression testing. Historical notes remain supported as plain text until edited in the rich editor.

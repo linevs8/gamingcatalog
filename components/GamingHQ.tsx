@@ -2,27 +2,46 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import RichNotes from "@/components/RichNotes";
+import { DndContext, PointerSensor, KeyboardSensor, closestCenter, useSensor, useSensors } from "@dnd-kit/core";
+import type { DragStartEvent, DragEndEvent } from "@dnd-kit/core";
+import { SortableContext, rectSortingStrategy, verticalListSortingStrategy, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
+import { SortableItem, DragItem, DropTarget } from "@/components/DragItems";
+import type { DragInfo, TargetInfo } from "@/components/DragItems";
+import { moveGamePlacement, reorderCategories, placeCategory } from "@/lib/organization";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Archive, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BookOpen, Check,
   ChevronDown, ChevronRight, Cloud, CloudOff, ExternalLink, Gamepad2,
   GripVertical, LayoutDashboard, Library, Link2, List, Menu, MoreHorizontal,
-  Plus, Search, Settings2, Sparkles, Star, Trash2, X, PanelLeftClose
+  Plus, Search, Settings2, Sparkles, Star, Trash2, X, PanelLeftClose, Pencil,
+  Swords, Trophy, Heart, Users, Flame, Target, Bookmark, MonitorPlay,
+  Crown, Clock3, Compass, Puzzle, Zap, CalendarDays, FolderOpen, Shield, Coffee
 } from "lucide-react";
 import {
   type Category, type Data, type Game, type QuickLink, emptyData,
-  loadData, makeId, notePreview, saveData, validCover
+  loadData, makeId, notePreview, saveData, validCover, validateImport, type ThemeName
 } from "@/lib/data";
 
-type Modal = null | { type: "game" | "category" | "shelf" | "link" | "organize"; gameId?: string };
+type Modal = null | { type: "game" | "category" | "shelf" | "link" | "organize" | "pick-library" | "edit-game" | "edit-link"; gameId?: string; categoryId?: string; linkId?: string };
 const colors = ["#77A9F7", "#B39BFA", "#70C8BE", "#E8B878", "#F29BAD", "#96B6D1"];
-const icons = ["star", "gamepad", "book", "sparkle"];
+const icons = [
+  "star", "gamepad", "book", "sparkle", "swords", "trophy",
+  "heart", "users", "flame", "target", "bookmark", "monitor",
+  "crown", "clock", "compass", "puzzle", "zap", "calendar",
+  "folder", "shield", "coffee"
+];
 
+const categoryIcons = {
+  star: Star, gamepad: Gamepad2, book: BookOpen, sparkle: Sparkles,
+  swords: Swords, trophy: Trophy, heart: Heart, users: Users,
+  flame: Flame, target: Target, bookmark: Bookmark, monitor: MonitorPlay,
+  crown: Crown, clock: Clock3, compass: Compass, puzzle: Puzzle,
+  zap: Zap, calendar: CalendarDays, folder: FolderOpen, shield: Shield, coffee: Coffee
+};
 function LabelIcon({ name, size = 17 }: { name: string; size?: number }) {
-  if (name === "star") return <Star size={size}/>;
-  if (name === "book") return <BookOpen size={size}/>;
-  if (name === "sparkle") return <Sparkles size={size}/>;
-  return <Gamepad2 size={size}/>;
+  const IconComponent = categoryIcons[name as keyof typeof categoryIcons] || Gamepad2;
+  return <IconComponent size={size}/>;
 }
 function Cover({ game, className = "" }: { game?: Game; className?: string }) {
   const [broken, setBroken] = useState(false);
@@ -62,10 +81,58 @@ export default function GamingHQ() {
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const expandSidebar = () => setSidebarOpen(true);
+  const closeSidebar = () => setSidebarOpen(false);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [openCategoryMenu, setOpenCategoryMenu] = useState(false);
   const [mobileMenu, setMobileMenu] = useState(false);
   const [libraryView, setLibraryView] = useState<"gallery" | "list">("gallery");
+  const [pickerQuery, setPickerQuery] = useState("");
+  const [noteSelection,setNoteSelection] = useState<Record<string,string>>({});
+  const [showHistory,setShowHistory]=useState<Record<string,boolean>>({});
+  const [noteRefresh,setNoteRefresh]=useState<Record<string,number>>({});
+  const backupInputRef = useRef<HTMLInputElement>(null);
+  const [showPreferences,setShowPreferences] = useState(false);
+  const [backupMessage,setBackupMessage] = useState("");
+  const sensors=useSensors(
+    useSensor(PointerSensor,{activationConstraint:{delay:240,tolerance:6}}),
+    useSensor(KeyboardSensor,{coordinateGetter:sortableKeyboardCoordinates})
+  );
+  const [dragging,setDragging]=useState<DragInfo|null>(null);
+  const [undoData,setUndoData]=useState<Data|null>(null);
+  const [undoLabel,setUndoLabel]=useState("");
+  useEffect(()=>{
+    if(!undoData)return;
+    const timeout=window.setTimeout(()=>setUndoData(null),7000);
+    return ()=>window.clearTimeout(timeout);
+  },[undoData]);
+  const [editingNoteTitle, setEditingNoteTitle] = useState<string | null>(null);
+  const [noteTitleDraft, setNoteTitleDraft] = useState("");
+  const cancelNoteTitleSave = useRef(false);
+
+  const startEditingNoteTitle = (gameId: string) => {
+    cancelNoteTitleSave.current = false;
+    setNoteTitleDraft(data.noteTitles?.[gameId] || "Where I left off");
+    setEditingNoteTitle(gameId);
+  };
+  const commitNoteTitle = (gameId: string) => {
+    if (cancelNoteTitleSave.current) {
+      cancelNoteTitleSave.current = false;
+      return;
+    }
+    const title = noteTitleDraft.trim().slice(0, 80);
+    setData(previous => {
+      const noteTitles = { ...(previous.noteTitles || {}) };
+      if (title) noteTitles[gameId] = title;
+      else delete noteTitles[gameId];
+      return { ...previous, noteTitles };
+    });
+    setEditingNoteTitle(null);
+  };
+  const discardNoteTitleEdit = () => {
+    cancelNoteTitleSave.current = true;
+    setEditingNoteTitle(null);
+  };
 
   useEffect(() => {
     let live = true;
@@ -104,10 +171,26 @@ export default function GamingHQ() {
     .map(m => data.games.find(g => g.id === m.gameId))
     .filter((g): g is Game => Boolean(g));
   const membershipsFor = (id: string) => data.memberships.filter(m => m.gameId === id);
-  const openModal = (type: NonNullable<Modal>["type"], gameId?: string) => {
-    setName(""); setSubtitle(""); setCoverUrl(""); setLinkUrl(""); setLinkName("");
-    setTargetCategory(""); setCategoryColor(colors[0]); setCategoryIcon(icons[0]);
-    setError(""); setModal({ type, gameId });
+  const openModal = (type: NonNullable<Modal>["type"], gameId?: string, categoryId?: string, linkId?:string) => {
+    const existingGame=data.games.find(g=>g.id===gameId);
+    const existingLink=data.links.find(l=>l.id===linkId);
+    setName(type==="edit-game" ? existingGame?.title||"" : "");
+    setSubtitle(type==="edit-game" ? existingGame?.subtitle||"" : "");
+    setCoverUrl(type==="edit-game" ? existingGame?.coverUrl||"" : "");
+    setLinkUrl(type==="edit-link" ? existingLink?.url||"" : "");
+    setLinkName(type==="edit-link" ? existingLink?.title||"" : "");
+    setTargetCategory(type === "game" ? categoryId || "" : "");
+    setPickerQuery("");
+    setCategoryColor(colors[0]); setCategoryIcon(icons[0]);
+    setError(""); setModal({ type, gameId, categoryId,linkId });
+  };
+  const saveEditedGame=()=>{
+    if(!modal?.gameId) return;
+    if(!name.trim()){setError("Enter a game title.");return;}
+    if(!validCover(coverUrl.trim())){setError("Cover must be a valid http(s) URL.");return;}
+    change(d=>({...d,games:d.games.map(g=>g.id===modal.gameId?
+      {...g,title:name.trim(),subtitle:subtitle.trim(),coverUrl:coverUrl.trim()}:g)}));
+    setModal(null);
   };
   const addGame = () => {
     const title = name.trim();
@@ -133,10 +216,34 @@ export default function GamingHQ() {
     setModal(null);
     go("/category/" + c.id);
   };
+  const renameShelf=(shelfId:string,current:string)=>{
+    const next=window.prompt("Rename shelf:",current)?.trim().slice(0,70);
+    if(!next)return;
+    change(d=>({...d,shelves:d.shelves.map(s=>s.id===shelfId?{...s,name:next}:s)}));
+  };
+  const deleteShelf=(shelfId:string)=>{
+    if(!window.confirm("Delete this shelf? Its categories will return to your Dashboard, with all games and notes preserved."))return;
+    change(d=>{
+      const others=d.categories.filter(c=>c.location==="dashboard").length;
+      let offset=0;
+      return {...d,shelves:d.shelves.filter(s=>s.id!==shelfId),
+        categories:d.categories.map(c=>c.location===shelfId?{...c,location:"dashboard",order:others+(offset++)}:c)};
+    });
+  };
   const addShelf = () => {
     if (!name.trim()) { setError("Name your shelf."); return; }
     change(d => ({ ...d, shelves: [...d.shelves, { id: makeId(), name: name.trim(), order: d.shelves.length }] }));
     setModal(null);
+  };
+  const saveEditedLink=()=>{
+    if(!modal?.linkId) return;
+    try{
+      const uri=new URL(linkUrl.trim());
+      if(!["http:","https:"].includes(uri.protocol))throw new Error();
+      change(d=>({...d,links:d.links.map(l=>l.id===modal.linkId?
+        {...l,url:uri.toString(),title:linkName.trim()||uri.hostname}:l)}));
+      setModal(null);
+    }catch {setError("Enter a valid http(s) URL.");}
   };
   const addLink = () => {
     if (!modal?.gameId) return;
@@ -194,12 +301,123 @@ export default function GamingHQ() {
     setOpenCategoryMenu(false);
     go("/");
   };
+  const snapshotNote=(gameId:string,pageId:string)=>{
+    change(d=>{
+      const key=gameId+"/"+pageId;
+      const content=pageId==="current"?(d.notes[gameId]||""):
+        (d.notePages?.[gameId]||[]).find(p=>p.id===pageId)?.content||"";
+      if(!content)return d;
+      const prior=d.noteRevisions?.[key]||[];
+      if(prior[0]?.content===content)return d;
+      return {...d,noteRevisions:{...(d.noteRevisions||{}),[key]:
+        [{id:makeId(),content,createdAt:Date.now()},...prior].slice(0,15)}};
+    });
+  };
+  const restoreNote=(gameId:string,pageId:string,content:string)=>{
+    if(!window.confirm("Restore this earlier note? Your current content will be saved as a checkpoint first."))return;
+    change(d=>{
+      const key=gameId+"/"+pageId;
+      const current=pageId==="current"?(d.notes[gameId]||""):
+        (d.notePages?.[gameId]||[]).find(p=>p.id===pageId)?.content||"";
+      const revisions=d.noteRevisions?.[key]||[];
+      const next={...d,noteRevisions:{...(d.noteRevisions||{}),
+        [key]:current?[{id:makeId(),content:current,createdAt:Date.now()},...revisions].slice(0,15):revisions}};
+      if(pageId==="current")return {...next,notes:{...d.notes,[gameId]:content}};
+      return {...next,notePages:{...(d.notePages||{}),[gameId]:(d.notePages?.[gameId]||[])
+        .map(p=>p.id===pageId?{...p,content}:p)}};
+    });
+    const key=gameId+"/"+pageId;
+    setNoteRefresh(p=>({...p,[key]:(p[key]||0)+1}));
+  };
+  const addNotePage = (gameId: string) => {
+    const name = window.prompt("Name your new notes page:", "New page")?.trim();
+    if (!name) return;
+    const id = makeId();
+    change(d => ({...d, notePages: {...(d.notePages||{}),
+      [gameId]: [...(d.notePages?.[gameId]||[]), {id,title:name.slice(0,80),content:"",order:(d.notePages?.[gameId]||[]).length}]
+    }}));
+    setNoteSelection(p=>({...p,[gameId]:id}));
+  };
+  const deleteNotePage = (gameId: string,pageId: string) => {
+    if (!window.confirm("Delete this notes page and its contents? The main notes page won't be affected.")) return;
+    change(d=>({...d,notePages:{...(d.notePages||{}),[gameId]:(d.notePages?.[gameId]||[]).filter(p=>p.id!==pageId)}}));
+    setNoteSelection(p=>({...p,[gameId]:"current"}));
+  };
+  const renameNotePage = (gameId:string,pageId:string,currentName:string) => {
+    const name=window.prompt("Rename notes page:",currentName)?.trim().slice(0,80);
+    if (!name) return;
+    change(d=>({...d,notePages:{...(d.notePages||{}),[gameId]:(d.notePages?.[gameId]||[]).map(p=>p.id===pageId?{...p,title:name}:p)}}));
+  };
+  const exportBackup = () => {
+    const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");a.href=url;a.download="gaming-hq-backup-"+new Date().toISOString().slice(0,10)+".json";a.click();
+    window.setTimeout(()=>URL.revokeObjectURL(url),2000);
+    setBackupMessage("Backup downloaded. Keep it somewhere safe.");
+  };
+  const importBackup = async (file: File) => {
+    try {
+      if (file.size > 25_000_000) throw new Error("Backup file is too large.");
+      const imported=validateImport(JSON.parse(await file.text()));
+      if (!window.confirm("REPLACE this browser's Gaming HQ library with the imported backup? Export your current library first. This cannot be undone.")) return;
+      await saveData(imported);
+      setData(imported);
+      setBackupMessage("Backup imported successfully.");
+      go("/");
+    } catch(e) {
+      setBackupMessage(e instanceof Error?e.message:"Couldn't import that backup.");
+    } finally { if(backupInputRef.current)backupInputRef.current.value=""; }
+  };
+  const handleDragStart=(event:DragStartEvent)=>{
+    setDragging((event.active.data.current as DragInfo|undefined)||null);
+  };
+  const handleDragEnd=(event:DragEndEvent)=>{
+    setDragging(null);
+    const from=event.active.data.current as DragInfo|undefined;
+    const to=event.over?.data.current as TargetInfo|undefined;
+    if(!from||!to) return;
+    let next=data; let description="";
+    if(from.kind==="game") {
+      if(to.kind==="game") {
+        if(from.categoryId==="library"&&to.categoryId==="library")return;
+        next=moveGamePlacement(data,from.categoryId,from.gameId,
+          to.categoryId==="library"?null:to.categoryId,to.gameId);
+        description="Game moved";
+      } else if(to.kind==="category-target" || to.kind==="category") {
+        next=moveGamePlacement(data,from.categoryId,from.gameId,to.categoryId);
+        description="Game moved into category";
+      } else if(to.kind==="library-target") {
+        next=moveGamePlacement(data,from.categoryId,from.gameId,null);
+        description="Game removed from category";
+      }
+    } else if(from.kind==="category") {
+      if(to.kind==="category" || to.kind==="category-target") {
+        next=reorderCategories(data,from.categoryId,to.categoryId);
+        description="Categories reordered";
+      } else if(to.kind==="shelf-target") {
+        next=placeCategory(data,from.categoryId,to.shelfId);
+        description="Category moved to shelf";
+      } else if(to.kind==="dashboard-target") {
+        next=placeCategory(data,from.categoryId,"dashboard");
+        description="Category moved to Dashboard";
+      }
+    }
+    if(next!==data){
+      setUndoData(data);
+      setUndoLabel(description);
+      setData(next);
+    }
+  };
   const removeGame = (id: string) => {
     if (!window.confirm("Remove this game from your Library? Its notes and links will be deleted. This cannot be undone.")) return;
     change(d => {
       const notes={...d.notes}; delete notes[id];
-      return {...d, games:d.games.filter(g=>g.id!==id), memberships:d.memberships.filter(m=>m.gameId!==id),
-        links:d.links.filter(l=>l.gameId!==id), notes};
+      const noteTitles={...(d.noteTitles||{})}; delete noteTitles[id];
+      const notePages={...(d.notePages||{})}; delete notePages[id];
+      const noteRevisions={...(d.noteRevisions||{})};
+      for(const key of Object.keys(noteRevisions)) if(key.startsWith(id+"/"))delete noteRevisions[key];
+      return {...d, noteRevisions, games:d.games.filter(g=>g.id!==id), memberships:d.memberships.filter(m=>m.gameId!==id),
+        links:d.links.filter(l=>l.gameId!==id), notes, noteTitles,notePages};
     });
     setModal(null);
     go("/library");
@@ -208,24 +426,33 @@ export default function GamingHQ() {
   function CategoryRow({ category, index, length }: { category: Category; index: number; length: number }) {
     return (
       <div className="side-category">
-        <button className={"side-category-label " + (currentId===category.id?"active":"")}
-          onClick={()=>go("/category/"+category.id)} title={category.name}>
-          <span style={{color:category.color}}><LabelIcon name={category.icon} size={16}/></span>
-          <span className="truncate">{category.name}</span>
-        </button>
+        <DropTarget id={"target-category/"+category.id} data={{kind:"category-target",categoryId:category.id}}>
+          <button className={"side-category-label " + (currentId===category.id?"active":"")}
+            onClick={()=>go("/category/"+category.id)} title={category.name}>
+            <span style={{color:category.color}}><LabelIcon name={category.icon} size={16}/></span>
+            <span className="truncate">{category.name}</span>
+          </button>
+        </DropTarget>
         <button className="side-disclose" aria-label={"Show games in "+category.name}
           aria-expanded={expanded===category.id}
           onClick={()=>setExpanded(v=>v===category.id?null:category.id)}>
           {expanded===category.id?<ChevronDown size={15}/>:<ChevronRight size={15}/>}
         </button>
         {expanded===category.id && <div className="side-sublist">
-          {gamesIn(category.id).map((g,i)=><div className="side-game" key={g.id}>
+          <SortableContext items={gamesIn(category.id).map(g=>"side-game/"+category.id+"/"+g.id)}
+            strategy={verticalListSortingStrategy}>
+          {gamesIn(category.id).map((g,i)=><SortableItem
+            id={"side-game/"+category.id+"/"+g.id} key={g.id}
+            data={{kind:"game",categoryId:category.id,gameId:g.id}}>
+            <div className="side-game">
             <button onClick={()=>go("/game/"+g.id)} className="truncate" title={g.title}>{g.title}</button>
             <span className="side-controls">
               <button aria-label={"Move "+g.title+" up"} disabled={i===0} onClick={()=>moveGame(category.id,g.id,-1)}><ArrowUp size={13}/></button>
               <button aria-label={"Move "+g.title+" down"} disabled={i===gamesIn(category.id).length-1} onClick={()=>moveGame(category.id,g.id,1)}><ArrowDown size={13}/></button>
             </span>
-          </div>)}
+            </div>
+          </SortableItem>)}
+          </SortableContext>
           {!gamesIn(category.id).length&&<div className="muted small pad-small">No games yet</div>}
           <div className="side-move">
             <button title="Move category up" disabled={index===0} onClick={()=>moveCategory(category,-1)}><ArrowUp size={13}/> Category</button>
@@ -264,9 +491,11 @@ export default function GamingHQ() {
         <button className="primary" onClick={()=>openModal("category")}><Plus size={17}/> Create your first category</button>
         <div className="muted small">Or <Link href="/library">add a game to your Library</Link> first.</div>
       </div> :
+      <SortableContext items={dashboardCategories.map(c=>"category/"+c.id)} strategy={rectSortingStrategy}>
       <div className="category-grid">{dashboardCategories.map(c=>{
         const games=gamesIn(c.id), top=games.slice(0,4);
-        return <Link className="category-preview" href={"/category/"+c.id} key={c.id} style={{"--category-accent":c.color} as React.CSSProperties}>
+        return <SortableItem id={"category/"+c.id} data={{kind:"category",categoryId:c.id}} key={c.id}>
+          <Link className="category-preview" href={"/category/"+c.id} style={{"--category-accent":c.color} as React.CSSProperties}>
           <div className="category-head">
             <span className="category-icon" style={{color:c.color,background:c.color+"18"}}><LabelIcon name={c.icon}/></span>
             <div><h2>{c.name}</h2><div className="muted small">{games.length} {games.length===1?"game":"games"}</div></div>
@@ -276,8 +505,9 @@ export default function GamingHQ() {
             {Array.from({length:Math.max(0,4-top.length)},(_,i)=><div key={i} className="preview-empty"/>)}
           </div>
           <div className="category-foot"><span>{games.length>4?"+"+(games.length-4)+" more":"Your top-ranked games"}</span><span>Open category <ArrowRight size={14}/></span></div>
-        </Link>;
-      })}</div>}
+          </Link>
+        </SortableItem>;
+      })}</div></SortableContext>}
     </div>;
   }
 
@@ -298,7 +528,9 @@ export default function GamingHQ() {
         <button className="primary" onClick={()=>openModal("game")}><Plus size={17}/> Add a game</button>
       </div>:!filtered.length?<div className="empty-search">No games match “{query}”.</div>:
       <div className={libraryView==="gallery"?"games-grid":"games-list"}>
-        {filtered.map(g=><div key={g.id}>{GameCard({game:g,list:libraryView==="list",organize:true})}</div>)}
+        {filtered.map(g=><DragItem key={g.id} id={"library-game/"+g.id} data={{kind:"game",categoryId:"library",gameId:g.id}}>
+          {GameCard({game:g,list:libraryView==="list",organize:true})}
+        </DragItem>)}
       </div>}
     </div>;
   }
@@ -311,11 +543,19 @@ export default function GamingHQ() {
       {!data.shelves.length?<div className="blank-state compact"><div className="blank-symbol"><Archive size={30}/></div><h2>A little room to breathe.</h2>
       <p>Shelves hold categories you don't need on your main dashboard. Create one whenever you're ready.</p>
       <button className="primary" onClick={()=>openModal("shelf")}><Plus size={17}/> Create shelf</button></div>:
-      <div className="shelf-grid">{[...data.shelves].sort((a,b)=>a.order-b.order).map(s=><div className="shelf-card" key={s.id}>
-        <div className="shelf-heading"><Archive size={19}/><strong>{s.name}</strong><span className="muted small">{shelfCategories(s.id).length} categories</span></div>
-        {shelfCategories(s.id).map(c=><Link className="shelf-category" key={c.id} href={"/category/"+c.id}><LabelIcon name={c.icon}/><span>{c.name}</span><ChevronRight size={16}/></Link>)}
+      <div className="shelf-grid">{[...data.shelves].sort((a,b)=>a.order-b.order).map(s=>
+        <DropTarget id={"target-shelf/"+s.id} data={{kind:"shelf-target",shelfId:s.id}} key={s.id}>
+        <div className="shelf-card">
+        <div className="shelf-heading"><Archive size={19}/><strong>{s.name}</strong><span className="muted small">{shelfCategories(s.id).length} categories</span>
+          <button className="icon-button" title="Rename shelf" aria-label={"Rename "+s.name} onClick={()=>renameShelf(s.id,s.name)}><Pencil size={15}/></button>
+          <button className="icon-button" title="Delete shelf" aria-label={"Delete "+s.name} onClick={()=>deleteShelf(s.id)}><Trash2 size={15}/></button>
+        </div>
+        {shelfCategories(s.id).map(c=><DragItem key={c.id} id={"shelf-category/"+c.id}
+          data={{kind:"category",categoryId:c.id}}>
+          <Link className="shelf-category" href={"/category/"+c.id}><LabelIcon name={c.icon}/><span>{c.name}</span><ChevronRight size={16}/></Link>
+        </DragItem>)}
         {!shelfCategories(s.id).length&&<p className="muted small">Move a category here using its settings.</p>}
-      </div>)}</div>}
+      </div></DropTarget>)}</div>}
     </div>;
   }
 
@@ -325,7 +565,13 @@ export default function GamingHQ() {
       <div className="breadcrumbs"><Link href="/">Dashboard</Link><ChevronRight size={14}/><span>{category.name}</span></div>
       <div className="page-top"><div className="category-title"><span className="title-icon" style={{color:category.color,background:category.color+"18"}}><LabelIcon name={category.icon} size={26}/></span>
         <div><h1>{category.name}<span className="dot">.</span></h1><p className="subline">{games.length} {games.length===1?"game":"games"} · Your order</p></div></div>
-        <div className="page-actions"><button className="secondary" onClick={()=>go("/library")}><Plus size={16}/> Find games</button>
+        <div className="page-actions">
+          <button className="secondary" onClick={()=>openModal("pick-library",undefined,category.id)}>
+            <Library size={16}/> From Library
+          </button>
+          <button className="primary" onClick={()=>openModal("game",undefined,category.id)}>
+            <Plus size={16}/> New game
+          </button>
           <div className="segment"><button className={category.view==="gallery"?"selected":""} onClick={()=>setCategory(category.id,{view:"gallery"})} aria-label="Gallery view"><LayoutDashboard size={17}/></button>
           <button className={category.view==="list"?"selected":""} onClick={()=>setCategory(category.id,{view:"list"})} aria-label="List view"><List size={17}/></button></div>
           <button className="secondary icon-square" aria-label="Category settings" title="Category settings" onClick={()=>setOpenCategoryMenu(v=>!v)}><MoreHorizontal size={20}/></button>
@@ -340,15 +586,33 @@ export default function GamingHQ() {
         <button className="danger-text" onClick={()=>removeCategory(category.id)}><Trash2 size={16}/> Delete category (keep games)</button>
       </div>}
       {!games.length?<div className="blank-state compact"><div className="blank-symbol"><Gamepad2 size={30}/></div><h2>Nothing here yet.</h2>
-        <p>Add a game to your Library, then choose this category in its three-dot Organize menu.</p>
-        <button className="primary" onClick={()=>go("/library")}><Plus size={17}/> Browse your Library</button>
-      </div>:<><div className="subtle-hint"><GripVertical size={15}/> Ranking follows the order you set. Use the sidebar arrows to reorder in this first slice; hold-and-drag comes next.</div>
-        <div className={category.view==="gallery"?"games-grid":"games-list"}>{games.map(g=><div key={g.id}>{GameCard({game:g,list:category.view==="list",organize:true})}</div>)}</div></>}
+        <p>Create a new game right here, or choose one you've already added to your Library.</p>
+        <div className="empty-category-actions">
+          <button className="primary" onClick={()=>openModal("game",undefined,category.id)}>
+            <Plus size={17}/> Create a game
+          </button>
+          <button className="secondary" onClick={()=>openModal("pick-library",undefined,category.id)}>
+            <Library size={17}/> From Library
+          </button>
+        </div>
+      </div>:<><div className="subtle-hint"><GripVertical size={15}/> Hold a game briefly, then drag to reorder. You can also move games into another category using the sidebar.</div>
+        <SortableContext items={games.map(g=>"game/"+category.id+"/"+g.id)}
+            strategy={category.view==="gallery"?rectSortingStrategy:verticalListSortingStrategy}>
+          <div className={category.view==="gallery"?"games-grid":"games-list"}>
+            {games.map(g=><SortableItem id={"game/"+category.id+"/"+g.id} key={g.id}
+              data={{kind:"game",categoryId:category.id,gameId:g.id}}>
+              {GameCard({game:g,list:category.view==="list",organize:true})}
+            </SortableItem>)}
+          </div>
+        </SortableContext></>}
     </div>;
   }
 
   function GameScreen({ game }: { game: Game }) {
     const gameLinks=data.links.filter(l=>l.gameId===game.id).sort((a,b)=>a.order-b.order);
+    const pageId=noteSelection[game.id]||"current";
+    const historyKey=game.id+"/"+pageId;
+    const history=data.noteRevisions?.[historyKey]||[];
     const gameCategories=membershipsFor(game.id).map(m=>data.categories.find(c=>c.id===m.categoryId)).filter((c):c is Category=>Boolean(c));
     return <div className="screen workspace-screen">
       <div className="breadcrumbs"><button onClick={()=>router.back()}><ArrowLeft size={14}/> Back</button><ChevronRight size={14}/><span>{game.title}</span></div>
@@ -359,48 +623,168 @@ export default function GamingHQ() {
           {!gameCategories.length&&<span className="muted small">Only in Library</span>}</div>
       </div><button className="secondary icon-square" title="Organize game" aria-label="Organize game" onClick={()=>openModal("organize",game.id)}><MoreHorizontal size={20}/></button></div>
       <section className="workspace-section note-section">
-        <div className="section-head"><div><div className="section-overline">CURRENT</div><h2>Where I left off</h2></div>
-          <div className="save-indicator">{saveStatus==="saving"?<><Cloud size={15}/> Saving…</>:saveStatus==="error"?<><CloudOff size={15}/> Could not save</>:<><Check size={15}/> Saved locally</>}</div></div>
-        <textarea className="note-editor" value={data.notes[game.id]||""} spellCheck
-          placeholder={"What did you last do in "+game.title+"?\n\nWhat's next? Anything worth remembering?"}
-          onChange={e=>{const value=e.target.value; change(d=>({...d,notes:{...d.notes,[game.id]:value}}));}}/>
-        <div className="editor-foot">Just start typing · Ctrl+Z to undo · More formatting coming in the rich-text milestone</div>
+        <div className="note-page-tabs" role="tablist" aria-label="Notes pages">
+          <button type="button" role="tab" aria-selected={!noteSelection[game.id]||noteSelection[game.id]==="current"}
+            className={!noteSelection[game.id]||noteSelection[game.id]==="current"?"selected":""}
+            onClick={()=>setNoteSelection(p=>({...p,[game.id]:"current"}))}>Current</button>
+          {(data.notePages?.[game.id]||[]).sort((a,b)=>a.order-b.order).map(page=>
+            <button key={page.id} role="tab" aria-selected={noteSelection[game.id]===page.id}
+              className={noteSelection[game.id]===page.id?"selected":""}
+              onClick={()=>setNoteSelection(p=>({...p,[game.id]:page.id}))}>{page.title}</button>
+          )}
+          <button className="add-note-page" type="button" onClick={()=>addNotePage(game.id)} title="New notes page">
+            <Plus size={15}/> Add page
+          </button>
+        </div>
+        <div className="section-head">
+          <div><div className="section-overline">{!noteSelection[game.id]||noteSelection[game.id]==="current"?"CURRENT":"NOTES PAGE"}</div>
+            {!noteSelection[game.id]||noteSelection[game.id]==="current"?
+              <div className="note-title-row">
+                {editingNoteTitle === game.id ? (
+                  <>
+                    <input className="note-title-input" aria-label="Notebook heading"
+                      value={noteTitleDraft} maxLength={80} autoFocus
+                      onChange={e=>setNoteTitleDraft(e.target.value)}
+                      onBlur={()=>commitNoteTitle(game.id)}
+                      onKeyDown={e=>{
+                        if(e.key==="Enter"){e.preventDefault();commitNoteTitle(game.id);}
+                        if(e.key==="Escape"){e.preventDefault();discardNoteTitleEdit();}
+                      }}/>
+                    <button className="note-title-control" title="Save title" aria-label="Save notebook heading"
+                      onMouseDown={e=>e.preventDefault()} onClick={()=>commitNoteTitle(game.id)}><Check size={16}/></button>
+                    <button className="note-title-control" title="Cancel" aria-label="Cancel heading edit"
+                      onMouseDown={e=>e.preventDefault()} onClick={discardNoteTitleEdit}><X size={16}/></button>
+                  </>
+                ):<>
+                  <h2>{data.noteTitles?.[game.id]||"Where I left off"}</h2>
+                  <button className="note-title-control" aria-label="Rename notebook heading"
+                    title="Rename this notebook title" onClick={()=>startEditingNoteTitle(game.id)}><Pencil size={15}/></button>
+                </>}
+              </div>:
+              <div className="note-title-row">
+                <h2>{data.notePages?.[game.id]?.find(p=>p.id===noteSelection[game.id])?.title||"Notes"}</h2>
+                <button className="note-title-control" aria-label="Rename notes page"
+                  onClick={()=>{
+                    const p=data.notePages?.[game.id]?.find(p=>p.id===noteSelection[game.id]);
+                    if(p)renameNotePage(game.id,p.id,p.title);
+                  }}><Pencil size={15}/></button>
+                <button className="note-title-control" aria-label="Delete notes page"
+                  onClick={()=>deleteNotePage(game.id,noteSelection[game.id])}><Trash2 size={15}/></button>
+              </div>
+            }
+          </div>
+          <div className="save-indicator">{saveStatus==="saving"?<><Cloud size={15}/> Saving…</>:
+            saveStatus==="error"?<><CloudOff size={15}/> Could not save</>:<><Check size={15}/> Saved locally</>}</div>
+        </div>
+        {(!noteSelection[game.id]||noteSelection[game.id]==="current")?
+          <RichNotes key={game.id+":current:"+(noteRefresh[game.id+"/current"]||0)} note={data.notes[game.id]||""}
+            onChange={html=>change(d=>({...d,notes:{...d.notes,[game.id]:html}}))}/>:
+          <RichNotes key={game.id+":"+noteSelection[game.id]+":"+(noteRefresh[historyKey]||0)}
+            note={data.notePages?.[game.id]?.find(p=>p.id===noteSelection[game.id])?.content||""}
+            onChange={html=>change(d=>({...d,notePages:{...(d.notePages||{}),
+              [game.id]:(d.notePages?.[game.id]||[]).map(p=>p.id===noteSelection[game.id]?{...p,content:html}:p)}}))}/>
+        }
+        <div className="note-history-bar">
+          <button className="history-action" type="button" onClick={()=>snapshotNote(game.id,pageId)}>
+            <BookOpen size={14}/> Save checkpoint
+          </button>
+          <button className="history-action" type="button"
+            onClick={()=>setShowHistory(prev=>({...prev,[historyKey]:!prev[historyKey]}))}>
+            <Clock3 size={14}/> History ({history.length})
+          </button>
+        </div>
+        {showHistory[historyKey]&&<div className="note-history-list">
+          {history.length?history.map(rev=><div key={rev.id} className="note-history-row">
+            <span>{new Date(rev.createdAt).toLocaleString()}</span>
+            <button className="secondary small-button" type="button"
+              onClick={()=>restoreNote(game.id,pageId,rev.content)}>Restore</button>
+          </div>):<p className="muted small">No checkpoints yet. Save one above before major note edits.</p>}
+        </div>}
       </section>
       <section className="workspace-section links-section"><div className="section-head"><div><div className="section-overline">TOOLS</div><h2>Quick links</h2></div>
         <button className="secondary small-button" onClick={()=>openModal("link",game.id)}><Plus size={16}/> Add link</button></div>
         {gameLinks.length?<div className="quick-links">{gameLinks.map(l=><div className="quick-link" key={l.id}>
           <a href={l.url} target="_blank" rel="noopener noreferrer"><Link2 size={16}/><span>{l.title}</span><ExternalLink size={14}/></a>
-          <button title={"Remove "+l.title} aria-label={"Remove "+l.title} onClick={()=>change(d=>({...d,links:d.links.filter(x=>x.id!==l.id)}))}><X size={15}/></button>
+          <button title={"Edit "+l.title} aria-label={"Edit "+l.title} onClick={()=>openModal("edit-link",game.id,undefined,l.id)}><Pencil size={15}/></button>
+          <button title={"Remove "+l.title} aria-label={"Remove "+l.title}
+            onClick={()=>{if(window.confirm("Remove this quick link?"))change(d=>({...d,links:d.links.filter(x=>x.id!==l.id)}));}}><X size={15}/></button>
         </div>)}</div>:<p className="muted small">Pin a walkthrough, wiki or guide here so it's always one click away.</p>}
       </section>
     </div>;
   }
 
-  return <div className="app-shell">
+  return <DndContext sensors={sensors} collisionDetection={closestCenter}
+      onDragStart={handleDragStart} onDragEnd={handleDragEnd}
+      onDragCancel={()=>setDragging(null)}>
+    <div className={"app-shell theme-"+(data.theme||"midnight")}>
     <aside className={"sidebar "+(!sidebarOpen?"collapsed ":"")+(mobileMenu?"mobile-open":"")}>
-      <div className="brand"><div className="brand-icon"><Gamepad2 size={23}/></div>{sidebarOpen&&<div><strong>Gaming<span>HQ</span></strong><small>Your games, your space.</small></div>}
-        <button className="sidebar-collapse" title="Toggle sidebar" aria-label="Toggle sidebar" onClick={()=>setSidebarOpen(v=>!v)}><PanelLeftClose size={17}/></button>
+      <div className="brand">
+        {sidebarOpen ? (
+          <>
+            <div className="brand-icon"><Gamepad2 size={23}/></div>
+            <div className="brand-copy"><strong>Gaming<span>HQ</span></strong><small>Your games, your space.</small></div>
+            <button className="sidebar-collapse" type="button" title="Collapse sidebar" aria-label="Collapse sidebar" onClick={()=>{closeSidebar();setMobileMenu(false);}}>
+              <PanelLeftClose size={17}/>
+            </button>
+          </>
+        ) : (
+          <button className="brand-icon brand-expand" type="button" aria-label="Expand sidebar" title="Expand sidebar" onClick={expandSidebar}>
+            <Gamepad2 size={23}/>
+          </button>
+        )}
       </div>
       <nav className="nav">
         <div className="nav-label">WORKSPACE</div>
-        <Link className={"nav-item "+(section==="dashboard"?"nav-active":"")} href="/"><LayoutDashboard size={18}/>{sidebarOpen&&<span>Dashboard</span>}</Link>
-        <Link className={"nav-item "+(section==="library"?"nav-active":"")} href="/library"><Library size={18}/>{sidebarOpen&&<span>All Games</span>}</Link>
-        <Link className={"nav-item shelf-nav "+(section==="shelves"?"nav-active":"")} href="/shelves"><Archive size={18}/>{sidebarOpen&&<span>Shelves</span>}</Link>
+        {sidebarOpen ? (
+          <>
+            <DropTarget id="target-dashboard" data={{kind:"dashboard-target"}}>
+              <Link className={"nav-item "+(section==="dashboard"?"nav-active":"")} href="/"><LayoutDashboard size={18}/><span>Dashboard</span></Link>
+            </DropTarget>
+            <DropTarget id="target-library" data={{kind:"library-target"}}>
+              <Link className={"nav-item "+(section==="library"?"nav-active":"")} href="/library"><Library size={18}/><span>All Games</span></Link>
+            </DropTarget>
+            <Link className={"nav-item shelf-nav "+(section==="shelves"?"nav-active":"")} href="/shelves"><Archive size={18}/><span>Shelves</span></Link>
+          </>
+        ) : (
+          <>
+            <button type="button" className={"nav-item nav-expand "+(section==="dashboard"?"nav-active":"")}
+              aria-label="Expand sidebar for Dashboard" title="Expand sidebar · Dashboard" onClick={expandSidebar}><LayoutDashboard size={18}/></button>
+            <button type="button" className={"nav-item nav-expand "+(section==="library"?"nav-active":"")}
+              aria-label="Expand sidebar for All Games" title="Expand sidebar · All Games" onClick={expandSidebar}><Library size={18}/></button>
+            <button type="button" className={"nav-item nav-expand shelf-nav "+(section==="shelves"?"nav-active":"")}
+              aria-label="Expand sidebar for Shelves" title="Expand sidebar · Shelves" onClick={expandSidebar}><Archive size={18}/></button>
+          </>
+        )}
         {sidebarOpen&&<><div className="nav-label nav-label-categories">YOUR CATEGORIES
           <button title="New category" aria-label="New category" onClick={()=>openModal("category")}><Plus size={16}/></button></div>
-          <div className="category-nav">{dashboardCategories.map((c,i)=><div key={c.id}>{CategoryRow({category:c,index:i,length:dashboardCategories.length})}</div>)}
+          <SortableContext items={dashboardCategories.map(c=>"side-category/"+c.id)} strategy={verticalListSortingStrategy}>
+          <div className="category-nav">{dashboardCategories.map((c,i)=>
+            <SortableItem id={"side-category/"+c.id} key={c.id}
+              data={{kind:"category",categoryId:c.id}}>
+              {CategoryRow({category:c,index:i,length:dashboardCategories.length})}
+            </SortableItem>)}
             {!dashboardCategories.length&&<div className="nav-empty">Your categories will appear here.</div>}
-          </div></>}
+          </div></SortableContext></>}
+          {sidebarOpen&&dragging?.kind==="category"&&
+            <div className="drag-shelf-targets">
+              <div className="nav-label">MOVE CATEGORY TO</div>
+              {data.shelves.map(s=><DropTarget key={s.id} id={"target-shelf/"+s.id}
+                data={{kind:"shelf-target",shelfId:s.id}} className="sidebar-drop">
+                <Archive size={15}/> {s.name}
+              </DropTarget>)}
+              {!data.shelves.length&&<span className="muted small">Create a Shelf first to move categories here.</span>}
+            </div>}
       </nav>
       <div className="sidebar-bottom"><div className="local-badge"><span className="local-dot"/>{sidebarOpen&&<span>{saveStatus==="error"?"Saving error":"Guest mode · Local only"}</span>}</div></div>
     </aside>
     {mobileMenu&&<button className="mobile-overlay" aria-label="Close navigation" onClick={()=>setMobileMenu(false)}/>}
     <div className="main-shell">
-      <header className="topbar"><div className="topbar-left"><button className="icon-button mobile-toggle" onClick={()=>setMobileMenu(v=>!v)} aria-label="Open navigation"><Menu size={20}/></button>
+      <header className="topbar"><div className="topbar-left"><button className="icon-button mobile-toggle" onClick={()=>{setSidebarOpen(true);setMobileMenu(v=>!v);}} aria-label="Open navigation"><Menu size={20}/></button>
         <button className="icon-button" aria-label="Back" title="Back" onClick={()=>router.back()}><ArrowLeft size={19}/></button>
         <button className="icon-button" aria-label="Forward" title="Forward" onClick={()=>router.forward()}><ArrowRight size={19}/></button>
         <span className="topbar-divider"/><span className="topbar-location">{section==="dashboard"?"Dashboard":section==="library"?"Library":section==="shelves"?"Shelves":section==="category"?currentCategory?.name:currentGame?.title||"Gaming HQ"}</span></div>
-        <div className="topbar-right"><span className="guest-chip"><Cloud size={14}/> Guest workspace</span><button className="icon-button" title="Settings coming later" aria-label="Settings coming later" disabled><Settings2 size={18}/></button></div>
+        <div className="topbar-right"><span className="guest-chip"><Cloud size={14}/> Guest workspace</span><button className="icon-button" title="Appearance and backups" aria-label="Appearance and backups"
+          onClick={()=>{setShowPreferences(true);setBackupMessage("");}}><Settings2 size={18}/></button></div>
       </header>
       <main className="main-content">{!ready?<div className="loading"><span className="pulse-dot"/> Opening your space…</div>:
         section==="dashboard"?Dashboard():section==="library"?LibraryScreen():section==="shelves"?ShelvesScreen():
@@ -409,16 +793,43 @@ export default function GamingHQ() {
         <div className="blank-state"><h2>Couldn't find that page.</h2><button className="primary" onClick={()=>go("/")}>Back to dashboard</button></div>}
       </main>
     </div>
+    {showPreferences&&<div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setShowPreferences(false);}}>
+      <div className="dialog preferences-dialog" role="dialog" aria-modal="true" aria-label="Gaming HQ preferences">
+        <div className="dialog-head"><h2>Preferences</h2>
+          <button className="icon-button" aria-label="Close preferences" onClick={()=>setShowPreferences(false)}><X size={20}/></button></div>
+        <div className="dialog-fields">
+          <div><div className="setting-caption">APPEARANCE</div><p className="muted small">Choose your home base's look.</p></div>
+          <div className="theme-grid">
+            {([["midnight","Midnight Blue"],["obsidian","Obsidian"],["violet","Dusk Violet"],["teal","Deep Teal"]] as [ThemeName,string][]).map(([id,label])=>
+              <button className={"theme-choice theme-preview-"+id+((data.theme||"midnight")===id?" chosen":"")}
+                key={id} onClick={()=>change(d=>({...d,theme:id}))}>
+                <span className="theme-preview-bar"/><strong>{label}</strong>
+                {(data.theme||"midnight")===id&&<Check size={15}/>}
+              </button>)}
+          </div>
+          <div className="dialog-separator"/>
+          <div><div className="setting-caption">DATA & BACKUPS</div><p className="muted small">Your notes currently live in this browser, not in a cloud account. Export regularly and before switching preview URLs.</p></div>
+          <button className="secondary" onClick={exportBackup}>Download JSON backup</button>
+          <input ref={backupInputRef} type="file" accept=".json,application/json" className="hidden-backup-input"
+            onChange={e=>{const file=e.currentTarget.files?.[0];if(file)void importBackup(file);}}/>
+          <button className="secondary" onClick={()=>backupInputRef.current?.click()}>Import backup (replace this library)</button>
+          {backupMessage&&<p role="status" className="muted small">{backupMessage}</p>}
+        </div>
+        <div className="dialog-footer"><button className="primary" onClick={()=>setShowPreferences(false)}>Done</button></div>
+      </div>
+    </div>}
     {modal&&<div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setModal(null)}}>
       <div className="dialog" role="dialog" aria-modal="true" aria-label={modal.type==="organize"?"Organize game":"Add new item"}>
-        <div className="dialog-head"><h2>{modal.type==="game"?"Add a game":modal.type==="category"?"New category":modal.type==="shelf"?"New shelf":
-          modal.type==="link"?"Add quick link":"Organize game"}</h2><button className="icon-button" title="Close" onClick={()=>setModal(null)}><X size={20}/></button></div>
-        {modal.type==="game"&&<div className="dialog-fields"><p className="muted small">Manual entry for now. Automatic game search is planned next.</p>
+        <div className="dialog-head"><h2>{modal.type==="game"?"Add a game":modal.type==="edit-game"?"Edit game":
+          modal.type==="category"?"New category":modal.type==="shelf"?"New shelf":
+          modal.type==="link"?"Add quick link":modal.type==="edit-link"?"Edit quick link":
+          modal.type==="pick-library"?"Add from Library":"Organize game"}</h2><button className="icon-button" title="Close" onClick={()=>setModal(null)}><X size={20}/></button></div>
+        {(modal.type==="game"||modal.type==="edit-game")&&<div className="dialog-fields"><p className="muted small">Manual entry for now. Automatic game search is planned next.</p>
           <label>Game title<input autoFocus value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Kingdom Hearts Final Mix"/></label>
           <label>Subtitle / details <span className="muted">(optional)</span><input value={subtitle} onChange={e=>setSubtitle(e.target.value)} placeholder="e.g. PlayStation 2 · Action RPG"/></label>
           <label>Cover image URL <span className="muted">(optional)</span><input value={coverUrl} onChange={e=>setCoverUrl(e.target.value)} placeholder="https://…"/></label>
-          <label>Add to a category <span className="muted">(optional)</span><select value={targetCategory} onChange={e=>setTargetCategory(e.target.value)}>
-            <option value="">Only add to Library</option>{data.categories.map(c=><option value={c.id} key={c.id}>{c.name}</option>)}</select></label></div>}
+          {modal.type==="game"&&<label>Add to a category <span className="muted">(optional)</span><select value={targetCategory} onChange={e=>setTargetCategory(e.target.value)}>
+            <option value="">Only add to Library</option>{data.categories.map(c=><option value={c.id} key={c.id}>{c.name}</option>)}</select></label>}</div>}
         {modal.type==="category"&&<div className="dialog-fields"><label>Category name<input autoFocus value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Priority, Solo, Multiplayer"/></label>
           <label>Location<select value={targetCategory} onChange={e=>setTargetCategory(e.target.value)}><option value="">Dashboard</option>{data.shelves.map(s=><option key={s.id} value={s.id}>Shelf: {s.name}</option>)}</select></label>
           <label>Accent color</label><div className="swatches">{colors.map(c=><button className={"swatch "+(categoryColor===c?"chosen":"")} style={{background:c}} key={c}
@@ -426,8 +837,33 @@ export default function GamingHQ() {
           <label>Icon</label><div className="icon-choices">{icons.map(i=><button className={i===categoryIcon?"chosen":""} key={i} onClick={()=>setCategoryIcon(i)}><LabelIcon name={i}/></button>)}</div></div>}
         {modal.type==="shelf"&&<div className="dialog-fields"><label>Shelf name<input autoFocus value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Backlog, Completed, Wishlist"/></label>
           <p className="muted small">You can move existing categories into this shelf from their category settings.</p></div>}
-        {modal.type==="link"&&<div className="dialog-fields"><label>URL<input autoFocus value={linkUrl} onChange={e=>setLinkUrl(e.target.value)} placeholder="https://…"/></label>
+        {(modal.type==="link"||modal.type==="edit-link")&&<div className="dialog-fields"><label>URL<input autoFocus value={linkUrl} onChange={e=>setLinkUrl(e.target.value)} placeholder="https://…"/></label>
           <label>Title <span className="muted">(optional)</span><input value={linkName} onChange={e=>setLinkName(e.target.value)} placeholder="e.g. Walkthrough"/></label></div>}
+        {modal.type==="pick-library"&&<div className="dialog-fields">
+          <p className="muted small">Choose games for {data.categories.find(c=>c.id===modal.categoryId)?.name || "this category"}. Already-added games remain in your Library and any other categories.</p>
+          <label>Search your games
+            <input type="search" autoFocus value={pickerQuery} onChange={e=>setPickerQuery(e.target.value)}
+              placeholder="Search titles in your Library…"/>
+          </label>
+          <div className="library-picker">
+            {data.games.filter(game=>game.title.toLowerCase().includes(pickerQuery.trim().toLowerCase()))
+              .sort((a,b)=>a.title.localeCompare(b.title)).map(game=>{
+                const included=data.memberships.some(m=>m.gameId===game.id&&m.categoryId===modal.categoryId);
+                return <label className="library-picker-item" key={game.id}>
+                  <input type="checkbox" checked={included}
+                    onChange={e=>toggleMembership(game.id,modal.categoryId||"",e.target.checked)}/>
+                  <span className="library-picker-title">{game.title}</span>
+                  {included&&<Check size={15} className="picker-check"/>}
+                </label>;
+              })}
+            {!data.games.length?<p className="muted small">Your Library is empty. Create your first game here.</p>:
+              !data.games.some(g=>g.title.toLowerCase().includes(pickerQuery.trim().toLowerCase()))?
+              <p className="muted small">No games match that search.</p>:null}
+          </div>
+          <button className="secondary" onClick={()=>openModal("game",undefined,modal.categoryId)}>
+            <Plus size={16}/> Create a new game instead
+          </button>
+        </div>}
         {modal.type==="organize"&&<div className="dialog-fields">
           <p className="muted small">{data.games.find(g=>g.id===modal.gameId)?.title} can appear in multiple categories. All changes are saved locally.</p>
           <div className="organize-checks">{data.categories.map(c=><label key={c.id}><input type="checkbox"
@@ -435,13 +871,24 @@ export default function GamingHQ() {
             onChange={e=>toggleMembership(modal.gameId||"",c.id,e.target.checked)}/><span style={{color:c.color}}><LabelIcon name={c.icon} size={16}/></span>{c.name}</label>)}
             {!data.categories.length&&<p className="muted small">No categories yet. Create one from the Dashboard first.</p>}</div>
           <div className="dialog-separator"/>
+          <button className="secondary" onClick={()=>openModal("edit-game",modal.gameId)}><Pencil size={16}/> Edit game title and cover</button>
           <button className="danger-text" onClick={()=>removeGame(modal.gameId||"")}><Trash2 size={16}/> Remove from Library and delete notes</button>
         </div>}
         {error&&<p role="alert" className="field-error">{error}</p>}
-        <div className="dialog-footer"><button className="secondary" onClick={()=>setModal(null)}>{modal.type==="organize"?"Done":"Cancel"}</button>
-          {modal.type!=="organize"&&<button className="primary" onClick={modal.type==="game"?addGame:modal.type==="category"?addCategory:modal.type==="shelf"?addShelf:addLink}>
-            <Plus size={16}/>{modal.type==="game"?"Add game":modal.type==="category"?"Create category":modal.type==="shelf"?"Create shelf":"Add link"}</button>}</div>
+        <div className="dialog-footer"><button className="secondary" onClick={()=>setModal(null)}>
+          {modal.type==="organize"||modal.type==="pick-library"?"Done":"Cancel"}</button>
+          {modal.type!=="organize"&&modal.type!=="pick-library"&&<button className="primary" onClick={modal.type==="game"?addGame:modal.type==="edit-game"?saveEditedGame:
+            modal.type==="category"?addCategory:modal.type==="shelf"?addShelf:
+            modal.type==="edit-link"?saveEditedLink:addLink}>
+            <Plus size={16}/>{modal.type==="game"?"Add game":modal.type==="edit-game"?"Save game":
+            modal.type==="category"?"Create category":modal.type==="shelf"?"Create shelf":
+            modal.type==="edit-link"?"Save link":"Add link"}</button>}</div>
       </div>
     </div>}
-  </div>;
+    {undoData&&<div className="undo-toast" role="status">
+      <span>{undoLabel}</span><button type="button" onClick={()=>{setData(undoData);setUndoData(null);}}>Undo</button>
+      <button type="button" aria-label="Dismiss undo" onClick={()=>setUndoData(null)}><X size={14}/></button>
+    </div>}
+  </div>
+  </DndContext>;
 }
