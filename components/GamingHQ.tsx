@@ -89,6 +89,8 @@ export default function GamingHQ() {
   const [libraryView, setLibraryView] = useState<"gallery" | "list">("gallery");
   const [pickerQuery, setPickerQuery] = useState("");
   const [noteSelection,setNoteSelection] = useState<Record<string,string>>({});
+  const [showHistory,setShowHistory]=useState<Record<string,boolean>>({});
+  const [noteRefresh,setNoteRefresh]=useState<Record<string,number>>({});
   const backupInputRef = useRef<HTMLInputElement>(null);
   const [showPreferences,setShowPreferences] = useState(false);
   const [backupMessage,setBackupMessage] = useState("");
@@ -299,6 +301,34 @@ export default function GamingHQ() {
     setOpenCategoryMenu(false);
     go("/");
   };
+  const snapshotNote=(gameId:string,pageId:string)=>{
+    change(d=>{
+      const key=gameId+"/"+pageId;
+      const content=pageId==="current"?(d.notes[gameId]||""):
+        (d.notePages?.[gameId]||[]).find(p=>p.id===pageId)?.content||"";
+      if(!content)return d;
+      const prior=d.noteRevisions?.[key]||[];
+      if(prior[0]?.content===content)return d;
+      return {...d,noteRevisions:{...(d.noteRevisions||{}),[key]:
+        [{id:makeId(),content,createdAt:Date.now()},...prior].slice(0,15)}};
+    });
+  };
+  const restoreNote=(gameId:string,pageId:string,content:string)=>{
+    if(!window.confirm("Restore this earlier note? Your current content will be saved as a checkpoint first."))return;
+    change(d=>{
+      const key=gameId+"/"+pageId;
+      const current=pageId==="current"?(d.notes[gameId]||""):
+        (d.notePages?.[gameId]||[]).find(p=>p.id===pageId)?.content||"";
+      const revisions=d.noteRevisions?.[key]||[];
+      const next={...d,noteRevisions:{...(d.noteRevisions||{}),
+        [key]:current?[{id:makeId(),content:current,createdAt:Date.now()},...revisions].slice(0,15):revisions}};
+      if(pageId==="current")return {...next,notes:{...d.notes,[gameId]:content}};
+      return {...next,notePages:{...(d.notePages||{}),[gameId]:(d.notePages?.[gameId]||[])
+        .map(p=>p.id===pageId?{...p,content}:p)}};
+    });
+    const key=gameId+"/"+pageId;
+    setNoteRefresh(p=>({...p,[key]:(p[key]||0)+1}));
+  };
   const addNotePage = (gameId: string) => {
     const name = window.prompt("Name your new notes page:", "New page")?.trim();
     if (!name) return;
@@ -384,7 +414,9 @@ export default function GamingHQ() {
       const notes={...d.notes}; delete notes[id];
       const noteTitles={...(d.noteTitles||{})}; delete noteTitles[id];
       const notePages={...(d.notePages||{})}; delete notePages[id];
-      return {...d, games:d.games.filter(g=>g.id!==id), memberships:d.memberships.filter(m=>m.gameId!==id),
+      const noteRevisions={...(d.noteRevisions||{})};
+      for(const key of Object.keys(noteRevisions)) if(key.startsWith(id+"/"))delete noteRevisions[key];
+      return {...d, noteRevisions, games:d.games.filter(g=>g.id!==id), memberships:d.memberships.filter(m=>m.gameId!==id),
         links:d.links.filter(l=>l.gameId!==id), notes, noteTitles,notePages};
     });
     setModal(null);
@@ -578,6 +610,9 @@ export default function GamingHQ() {
 
   function GameScreen({ game }: { game: Game }) {
     const gameLinks=data.links.filter(l=>l.gameId===game.id).sort((a,b)=>a.order-b.order);
+    const pageId=noteSelection[game.id]||"current";
+    const historyKey=game.id+"/"+pageId;
+    const history=data.noteRevisions?.[historyKey]||[];
     const gameCategories=membershipsFor(game.id).map(m=>data.categories.find(c=>c.id===m.categoryId)).filter((c):c is Category=>Boolean(c));
     return <div className="screen workspace-screen">
       <div className="breadcrumbs"><button onClick={()=>router.back()}><ArrowLeft size={14}/> Back</button><ChevronRight size={14}/><span>{game.title}</span></div>
@@ -642,13 +677,29 @@ export default function GamingHQ() {
             saveStatus==="error"?<><CloudOff size={15}/> Could not save</>:<><Check size={15}/> Saved locally</>}</div>
         </div>
         {(!noteSelection[game.id]||noteSelection[game.id]==="current")?
-          <RichNotes key={game.id+":current"} note={data.notes[game.id]||""}
+          <RichNotes key={game.id+":current:"+(noteRefresh[game.id+"/current"]||0)} note={data.notes[game.id]||""}
             onChange={html=>change(d=>({...d,notes:{...d.notes,[game.id]:html}}))}/>:
-          <RichNotes key={game.id+":"+noteSelection[game.id]}
+          <RichNotes key={game.id+":"+noteSelection[game.id]+":"+(noteRefresh[historyKey]||0)}
             note={data.notePages?.[game.id]?.find(p=>p.id===noteSelection[game.id])?.content||""}
             onChange={html=>change(d=>({...d,notePages:{...(d.notePages||{}),
               [game.id]:(d.notePages?.[game.id]||[]).map(p=>p.id===noteSelection[game.id]?{...p,content:html}:p)}}))}/>
         }
+        <div className="note-history-bar">
+          <button className="history-action" type="button" onClick={()=>snapshotNote(game.id,pageId)}>
+            <BookOpen size={14}/> Save checkpoint
+          </button>
+          <button className="history-action" type="button"
+            onClick={()=>setShowHistory(prev=>({...prev,[historyKey]:!prev[historyKey]}))}>
+            <Clock3 size={14}/> History ({history.length})
+          </button>
+        </div>
+        {showHistory[historyKey]&&<div className="note-history-list">
+          {history.length?history.map(rev=><div key={rev.id} className="note-history-row">
+            <span>{new Date(rev.createdAt).toLocaleString()}</span>
+            <button className="secondary small-button" type="button"
+              onClick={()=>restoreNote(game.id,pageId,rev.content)}>Restore</button>
+          </div>):<p className="muted small">No checkpoints yet. Save one above before major note edits.</p>}
+        </div>}
       </section>
       <section className="workspace-section links-section"><div className="section-head"><div><div className="section-overline">TOOLS</div><h2>Quick links</h2></div>
         <button className="secondary small-button" onClick={()=>openModal("link",game.id)}><Plus size={16}/> Add link</button></div>
