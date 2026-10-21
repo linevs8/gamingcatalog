@@ -349,3 +349,10 @@ h2 { margin: 0; }
 .undo-toast button { background:transparent; border:0; color:var(--accent); font-weight:750; display:flex; align-items:center; }
 .drag-item .category-preview, .drag-item .game-tile { width:100%; }
 @media(prefers-reduced-motion:reduce){.drag-item { transition:none!important; }}
+
+.note-history-bar { display:flex; gap:13px; flex-wrap:wrap; justify-content:flex-end; padding-top:13px; margin-top:5px; }
+.history-action { display:inline-flex; gap:6px; align-items:center; border:0; background:transparent; color:var(--muted); padding:6px; font-size:11px; }
+.history-action:hover { color:var(--accent); }
+.note-history-list { margin-top:7px; padding:12px; border:1px solid var(--border); border-radius:9px; background:var(--panel-2); }
+.note-history-row { padding:9px 5px; display:flex; align-items:center; justify-content:space-between; gap:12px; font-size:11px; color:var(--muted); border-bottom:1px solid var(--border); }
+.note-history-row:last-child { border-bottom:0; }
