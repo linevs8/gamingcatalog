@@ -27,6 +27,8 @@ export function useAccountSync({data,setData,ready}:Props) {
   const revision=useRef<number|null>(null);
   const lastSaved=useRef("");
   const writing=useRef(false);
+  const syncFailed=useRef(false);
+  const nextRetryAt=useRef(0);
   const loadingId=useRef("");
   const generation=useRef(0);
 
@@ -118,7 +120,7 @@ export function useAccountSync({data,setData,ready}:Props) {
   };
 
   const flush=useCallback(async ()=>{
-    if(writing.current||activePhase.current!=="active"||!latestUser.current)return;
+    if(writing.current||activePhase.current!=="active"||!latestUser.current||Date.now()<nextRetryAt.current)return;
     const snapshot=currentData.current;
     const json=JSON.stringify(snapshot);
     if(json===lastSaved.current)return;
@@ -128,9 +130,11 @@ export function useAccountSync({data,setData,ready}:Props) {
       const newRevision=await writeCloud(userId,snapshot,revision.current);
       if(run!==generation.current)return;
       revision.current=newRevision;lastSaved.current=json;
+      syncFailed.current=false;nextRetryAt.current=0;
       setSyncStatus("saved");setError("");
     }catch(e){
       if(run!==generation.current)return;
+      syncFailed.current=true;nextRetryAt.current=Date.now()+12_000;
       setSyncStatus("error");setError(e instanceof Error?e.message:"Cloud save failed.");
       if(e instanceof Error&&e.name==="SyncConflict")setPhase("conflict");
     }finally {writing.current=false;}
@@ -167,7 +171,7 @@ export function useAccountSync({data,setData,ready}:Props) {
     if(!client)return;
     if(activePhase.current==="active") {
       await flush();
-      if(syncStatus==="error"||activePhase.current==="conflict") {
+      if(syncFailed.current) {
         if(!window.confirm("Some changes may not be in the cloud. Download a backup before signing out. Continue?"))return;
       }
     }else if(activePhase.current==="conflict"&&!window.confirm(
