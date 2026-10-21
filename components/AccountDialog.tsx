@@ -39,7 +39,10 @@ export default function AccountDialog({account,onClose}:{account:Account;onClose
           </button>
         </div>
         {account.error&&<p role="alert" className="field-error">{account.error}</p>}
-        <p className="muted small">We don't remove your guest copy. Export a backup before replacing any cloud data.</p>
+        <button type="button" className="account-back-to-guest" onClick={()=>void run(account.signOut)}>
+          Continue without an account
+        </button>
+        <p className="muted small">Your guest copy stays in this browser. Back up important data before replacing a cloud library.</p>
       </>;
     }
     if(account.phase==="conflict")return <>
@@ -62,9 +65,11 @@ export default function AccountDialog({account,onClose}:{account:Account;onClose
     </>;
     return <>
       <p className="account-lead">Save your games and notes across devices. Guest mode stays available.</p>
-      <button type="button" className="account-google" disabled={busy}
-        onClick={()=>void run(account.signInGoogle)}>Continue with Google</button>
-      <div className="account-or">or use your email</div>
+      {process.env.NEXT_PUBLIC_GOOGLE_AUTH_ENABLED==="true"&&<>
+        <button type="button" className="account-google" disabled={busy}
+          onClick={()=>void run(account.signInGoogle)}>Continue with Google</button>
+        <div className="account-or">or use your email</div>
+      </>}
       <form onSubmit={e=>{e.preventDefault();void run(()=>account.sendEmail(email));}}>
         <label className="account-email-label" htmlFor="account-email">Email address</label>
         <div className="account-email"><Mail size={17}/>
