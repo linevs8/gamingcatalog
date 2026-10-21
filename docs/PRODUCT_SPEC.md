@@ -1,7 +1,7 @@
 # Gaming HQ — Master Product & Design Specification
 
-**Version:** 1.1 — October 13, 2026  
-**Status:** Planning complete for first interactive milestone; **application code not yet started**.  
+**Version:** 1.2 — October 21, 2026  
+**Status:** Local-first prototype implemented on GitHub; automated and browser QA ongoing. Not a cloud-synced release.  
 **Repository:** https://github.com/linevs8/gamingcatalog  
 **Purpose:** Source of truth across ChatGPT chats, implementation branches and reviews.
 
@@ -174,3 +174,7 @@ Potential later additions: 'What should I play?' picker; session snapshots; game
 **Change log**
 - v1.0 — Original shared design specification compiled after planning conversation.
 - v1.1 — Correct actual repository; approved separate All Games and Add Game library experiences; approved blank first visit; retained technical decisions as pending validation.
+
+## 16. Local-first milestone implementation (October 21, 2026)
+
+Aims for a cohesive usable local-first baseline without pretending backend credentials or account systems exist. Implemented on the development branch: rich-text Current notes, optional named pages, manual checkpoints/restores, edit game metadata and quick links, guest backup import/export, themes, game/category drag-and-drop with Undo, named shelf targets, safe shelf renaming/deletion, direct New Game/From Library in categories, expanded icon palette. Next: real-provider licensing/credentials, secure authentication, cross-device sync and deeper real-browser regression testing. Historical notes remain supported as plain text until edited in the rich editor.
