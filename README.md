@@ -4,25 +4,29 @@
 
 Instead of a forced backlog or "daily rotation" system, **you** create the categories that make sense to you. The dashboard stays visual and clean; useful notes are only a click or two away.
 
-> **Prototype milestone:** This is an early, usable prototype—not a production-ready or cloud-synced product. A [working Vercel preview](https://gamingcatalog-fmyvpz6d4-endimetax-6704.vercel.app) was deployed from this feature branch. GitHub and the hosted preview may require separate account access.
+> **Prototype milestone:** This is a locally saved, usable prototype—not a production-ready or cloud-synced product. See [Vercel deployment history](https://vercel.com/) for the current preview; GitHub and the hosted preview may require separate account access.
 
-## What works in this prototype
+## What's usable in this milestone
 
-- **Blank-slate dashboard** with attractive, whole-card clickable category previews (up to four top-ranked covers each).
-- **All Games Library** with search, Gallery/List layouts, manual game addition, optional cover URLs and category assignment.
-- **Create games from any category** with the category preselected, or add existing Library games from that category without leaving the page.
-- **Your own categories**, custom icons/colors, category location on Dashboard or in a Shelf, plus independent Gallery/List views.
-- **Multiple memberships:** A game can appear in many categories with one shared workspace and set of notes.
-- **Shelves** stay outside the main dashboard and contain categories (no deeper nesting).
-- **Game workspaces** with per-game renameable note headings (default "Where I left off"), immediately editable plain-text current notes and addable quick links.
-- **Browser Back/Forward** using real URLs; narrow sidebar that expands when its icons are clicked, with one top collapse button.
-- **Guest-first local autosaving** using IndexedDB (localStorage fallback if unavailable).
+- **Dashboard:** Empty start, fully custom categories, whole-card navigation and four top-ranked game-cover previews.
+- **Library:** Add games manually, browse Gallery/List, search your collection, edit title/details/cover, and assign games to any number of categories. Games stay unique; notes are shared across categories.
+- **Categories & Shelves:** No deep nesting; custom colors and icons, independent Gallery/List views, rename, reorganization, shelves, and safe shelf deletion that moves categories back to Dashboard without deleting games.
+- **Drag & drop:** Hold briefly to move/reorder games and categories, drop onto sidebar destinations or named Shelves, with an **Undo** action. Sidebar arrows remain as an alternative.
+- **Game workspaces:** A **rich-text notebook** (bold, italics, headings, underline, link, color, bullets, numbering, checklists), a per-game renameable Current heading, optional extra note pages, checkpoint/restore history, and editable Quick Links.
+- **Guest saving & customization:** Browser-local autosave, Midnight Blue plus three optional themes, plus **JSON export/import** to move your data between browser origins.
+- **Navigation:** Narrow collapsible sidebar, browser Back/Forward, real links and shareable route structure.
 
-### What comes next
+## What is still planned
 
-Real IGDB-powered search and cover metadata; smooth hold-and-drag reordering/moving with Undo; rich text (bold, italics, color, checklists), additional notes pages and history; optional authentication and secure sync.
+- External automatic game search and cover metadata (requires approved API credentials/licensing).
+- Optional account sign-in, secure cloud synchronization, and multi-device data.
+- Further performance/accessibility/mobile QA, advanced bulk actions, enhanced note recovery and polish.
 
-**Important:** Notes are currently **plain text**, and ranking is done via small sidebar up/down controls. We intentionally haven't implemented the final drag gesture, rich-text editor, or cloud sync in this slice. Guest data stays in the same browser/device and can be lost if its storage is cleared. Guest data is tied to the exact website origin: a new Vercel preview hostname does **not** automatically inherit games or notes from an older preview.
+**Important:** This remains a **local-first prototype**, not a production-grade personal cloud service. Clearing browser storage can erase guest data. **Export your backup before switching to a different Vercel preview URL**; each preview hostname has its own browser storage. Rich-text notes convert from legacy plain text when edited; retained legacy notes remain readable.
+
+## Validation
+
+The GitHub Actions workflow runs TypeScript checking, pure organization invariants, and a Next.js production build. Automated CI passing does not substitute for clicking through real browsers and touch devices.
 
 ## Run locally
 
@@ -35,10 +39,12 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
-Check TypeScript with:
+Check TypeScript and run tests with:
 
 ~~~bash
 npm run lint
+npm run test
+npm run build
 ~~~
 
 The project uses Next.js (App Router), TypeScript, Lucide icons, and CSS design tokens. No external API keys are needed for this first manual-entry version.
