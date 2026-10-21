@@ -330,3 +330,22 @@ h2 { margin: 0; }
   .rich-content { padding:15px; }
   .note-page-tabs { max-width:100%; }
 }
+
+
+/* Drag-and-drop shares the same ordering as sidebar arrows and Gallery/List cards. */
+.drag-item { min-width:0; position:relative; }
+.drag-item.is-dragging { opacity:.48; z-index:30; }
+.drag-item[data-dnd-draggable] { cursor:grab; }
+.drag-item:active { cursor:grabbing; }
+.drop-target { border-radius:8px; min-width:0; }
+.drop-target-active { outline:2px dashed var(--accent); outline-offset:2px; background:color-mix(in srgb,var(--accent) 12%,transparent); }
+.sidebar-drop { display:flex; gap:9px; align-items:center; padding:12px 14px; color:var(--muted); background:var(--panel); border:1px dashed var(--border); margin:5px 2px; }
+.sidebar-drop.drop-target-active { color:var(--text); border-color:var(--accent); }
+.drag-shelf-targets { border-top:1px solid var(--border); padding:8px 8px 18px; }
+.undo-toast { position:fixed; z-index:70; bottom:24px; left:50%; transform:translateX(-50%);
+  display:flex; align-items:center; gap:14px; min-width:260px; justify-content:space-between;
+  color:var(--text); background:var(--panel-2); border:1px solid var(--accent);
+  box-shadow:0 9px 36px #0008; padding:12px 15px; border-radius:11px; font-weight:600; }
+.undo-toast button { background:transparent; border:0; color:var(--accent); font-weight:750; display:flex; align-items:center; }
+.drag-item .category-preview, .drag-item .game-tile { width:100%; }
+@media(prefers-reduced-motion:reduce){.drag-item { transition:none!important; }}
