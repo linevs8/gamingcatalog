@@ -512,15 +512,15 @@ export default function GamingHQ() {
   function Dashboard() {
     return <div className="screen">
       <div className="page-top"><div><div className="eyebrow">YOUR SPACE</div><h1>Dashboard<span className="dot">.</span></h1>
-        <p className="subline">Your games, organized your way.</p></div>
+        <p className="subline">Organize your collection.</p></div>
         <button className="primary" onClick={()=>openModal("category")}><Plus size={17}/> New category</button>
       </div>
       {!dashboardCategories.length ? <div className="blank-state">
         <div className="blank-symbol"><LayoutDashboard size={35}/></div>
-        <h2>Make yourself at home.</h2>
-        <p>Start with a category that makes sense to you. Priority, Story Games, Dailies — or something completely different.</p>
+        <h2>Create your first category</h2>
+        <p>Group your games however you like.</p>
         <button className="primary" onClick={()=>openModal("category")}><Plus size={17}/> Create your first category</button>
-        <div className="muted small">Or <Link href="/library">add a game to your Library</Link> first.</div>
+        <div className="muted small">Or <Link href="/library">add a game</Link>.</div>
       </div> :
       <SortableContext items={dashboardCategories.map(c=>"category/"+c.id)} strategy={rectSortingStrategy}>
       <div className="category-grid">{dashboardCategories.map(c=>{
@@ -547,7 +547,7 @@ export default function GamingHQ() {
       .sort((a,b)=>a.title.localeCompare(b.title));
     return <div className="screen">
       <div className="page-top"><div><div className="eyebrow">THE MASTER COLLECTION</div><h1>All Games<span className="dot">.</span></h1>
-        <p className="subline">Every game lives here, even when it appears in several categories.</p></div>
+        <p className="subline">Browse and manage your collection.</p></div>
         <button className="primary" onClick={()=>openModal("game")}><Plus size={17}/> Add Game</button></div>
       <div className="library-toolbar">
         <label className="search"><Search size={18}/><input aria-label="Search your games" placeholder="Search your library…" value={query} onChange={e=>setQuery(e.target.value)}/></label>
@@ -555,7 +555,7 @@ export default function GamingHQ() {
           <button className={libraryView==="list"?"selected":""} onClick={()=>setLibraryView("list")} title="List view"><List size={17}/></button></div>
       </div>
       {!data.games.length?<div className="blank-state compact"><div className="blank-symbol"><Library size={30}/></div>
-        <h2>Your library starts here.</h2><p>Add a game manually now. Game database search is coming in the next milestone.</p>
+        <h2>Your library is empty</h2><p>Search for a game or create a custom entry.</p>
         <button className="primary" onClick={()=>openModal("game")}><Plus size={17}/> Add a game</button>
       </div>:!filtered.length?<div className="empty-search">No games match “{query}”.</div>:
       <div className={libraryView==="gallery"?"games-grid":"games-list"}>
@@ -569,10 +569,10 @@ export default function GamingHQ() {
   function ShelvesScreen() {
     return <div className="screen">
       <div className="page-top"><div><div className="eyebrow">OUT OF THE LIMELIGHT</div><h1>Shelves<span className="dot">.</span></h1>
-      <p className="subline">Keep secondary categories organized and your dashboard clear.</p></div>
+      <p className="subline">Categories you want out of the way.</p></div>
       <button className="primary" onClick={()=>openModal("shelf")}><Plus size={17}/> New shelf</button></div>
-      {!data.shelves.length?<div className="blank-state compact"><div className="blank-symbol"><Archive size={30}/></div><h2>A little room to breathe.</h2>
-      <p>Shelves hold categories you don't need on your main dashboard. Create one whenever you're ready.</p>
+      {!data.shelves.length?<div className="blank-state compact"><div className="blank-symbol"><Archive size={30}/></div><h2>No shelves yet</h2>
+      <p>Keep secondary categories off your dashboard.</p>
       <button className="primary" onClick={()=>openModal("shelf")}><Plus size={17}/> Create shelf</button></div>:
       <div className="shelf-grid">{[...data.shelves].sort((a,b)=>a.order-b.order).map(s=>
         <DropTarget id={"target-shelf/"+s.id} data={{kind:"shelf-target",shelfId:s.id}} key={s.id}>
@@ -585,7 +585,7 @@ export default function GamingHQ() {
           data={{kind:"category",categoryId:c.id}}>
           <Link className="shelf-category" href={"/category/"+c.id}><LabelIcon name={c.icon}/><span>{c.name}</span><ChevronRight size={16}/></Link>
         </DragItem>)}
-        {!shelfCategories(s.id).length&&<p className="muted small">Move a category here using its settings.</p>}
+        {!shelfCategories(s.id).length&&<p className="muted small">Drag a category here or use its settings.</p>}
       </div></DropTarget>)}</div>}
     </div>;
   }
@@ -616,8 +616,8 @@ export default function GamingHQ() {
         <div className="setting-caption">Icon</div><div className="icon-choices">{icons.map(icon=><button key={icon} className={category.icon===icon?"chosen":""} onClick={()=>setCategory(category.id,{icon})}><LabelIcon name={icon}/></button>)}</div>
         <button className="danger-text" onClick={()=>removeCategory(category.id)}><Trash2 size={16}/> Delete category (keep games)</button>
       </div>}
-      {!games.length?<div className="blank-state compact"><div className="blank-symbol"><Gamepad2 size={30}/></div><h2>Nothing here yet.</h2>
-        <p>Create a new game right here, or choose one you've already added to your Library.</p>
+      {!games.length?<div className="blank-state compact"><div className="blank-symbol"><Gamepad2 size={30}/></div><h2>No games yet</h2>
+        <p>Add a new game or choose one from your library.</p>
         <div className="empty-category-actions">
           <button className="primary" onClick={()=>openModal("game",undefined,category.id)}>
             <Plus size={17}/> Create a game
@@ -626,7 +626,7 @@ export default function GamingHQ() {
             <Library size={17}/> From Library
           </button>
         </div>
-      </div>:<><div className="subtle-hint"><GripVertical size={15}/> Hold a game briefly, then drag to reorder. You can also move games into another category using the sidebar.</div>
+      </div>:<><div className="subtle-hint"><GripVertical size={15}/> Drag to reorder or move games.</div>
         <SortableContext items={games.map(g=>"game/"+category.id+"/"+g.id)}
             strategy={category.view==="gallery"?rectSortingStrategy:verticalListSortingStrategy}>
           <div className={category.view==="gallery"?"games-grid":"games-list"}>
@@ -738,7 +738,7 @@ export default function GamingHQ() {
             <span>{new Date(rev.createdAt).toLocaleString()}</span>
             <button className="secondary small-button" type="button"
               onClick={()=>restoreNote(game.id,pageId,rev.content)}>Restore</button>
-          </div>):<p className="muted small">No checkpoints yet. Save one above before major note edits.</p>}
+          </div>):<p className="muted small">No saved checkpoints.</p>}
         </div>}
       </section>
       <section className="workspace-section links-section"><div className="section-head"><div><div className="section-overline">TOOLS</div><h2>Quick links</h2></div>
@@ -748,7 +748,7 @@ export default function GamingHQ() {
           <button title={"Edit "+l.title} aria-label={"Edit "+l.title} onClick={()=>openModal("edit-link",game.id,undefined,l.id)}><Pencil size={15}/></button>
           <button title={"Remove "+l.title} aria-label={"Remove "+l.title}
             onClick={()=>{if(window.confirm("Remove this quick link?"))change(d=>({...d,links:d.links.filter(x=>x.id!==l.id)}));}}><X size={15}/></button>
-        </div>)}</div>:<p className="muted small">Pin a walkthrough, wiki or guide here so it's always one click away.</p>}
+        </div>)}</div>:<p className="muted small">Keep guides and useful links here.</p>}
       </section>
     </div>;
   }
@@ -889,7 +889,7 @@ export default function GamingHQ() {
           onSelect={addIgdbGame}/>}
         {(modal.type==="edit-game"||(modal.type==="game"&&addGameMode==="manual"))&&
           <div className="dialog-fields">
-          {modal.type==="game"&&<p className="muted small">Create a custom entry even if it isn't on IGDB.</p>}
+          {modal.type==="game"&&<p className="muted small">Add a custom game.</p>}
           <label>Game title<input autoFocus value={name} onChange={e=>setName(e.target.value)}
             placeholder="e.g. Kingdom Hearts Final Mix"/></label>
           <label>Subtitle / details <span className="muted">(optional)</span>
@@ -903,7 +903,7 @@ export default function GamingHQ() {
             aria-label={"Color "+c} onClick={()=>setCategoryColor(c)}/>)}</div>
           <label>Icon</label><div className="icon-choices">{icons.map(i=><button className={i===categoryIcon?"chosen":""} key={i} onClick={()=>setCategoryIcon(i)}><LabelIcon name={i}/></button>)}</div></div>}
         {modal.type==="shelf"&&<div className="dialog-fields"><label>Shelf name<input autoFocus value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Backlog, Completed, Wishlist"/></label>
-          <p className="muted small">You can move existing categories into this shelf from their category settings.</p></div>}
+          <p className="muted small">Move categories here from their settings.</p></div>}
         {(modal.type==="link"||modal.type==="edit-link")&&<div className="dialog-fields"><label>URL<input autoFocus value={linkUrl} onChange={e=>setLinkUrl(e.target.value)} placeholder="https://…"/></label>
           <label>Title <span className="muted">(optional)</span><input value={linkName} onChange={e=>setLinkName(e.target.value)} placeholder="e.g. Walkthrough"/></label></div>}
         {modal.type==="pick-library"&&<div className="dialog-fields">
@@ -932,11 +932,11 @@ export default function GamingHQ() {
           </button>
         </div>}
         {modal.type==="organize"&&<div className="dialog-fields">
-          <p className="muted small">{data.games.find(g=>g.id===modal.gameId)?.title} can appear in multiple categories. All changes are saved locally.</p>
+          <p className="muted small">{data.games.find(g=>g.id===modal.gameId)?.title} can appear in multiple categories. </p>
           <div className="organize-checks">{data.categories.map(c=><label key={c.id}><input type="checkbox"
             checked={data.memberships.some(m=>m.gameId===modal.gameId&&m.categoryId===c.id)}
             onChange={e=>toggleMembership(modal.gameId||"",c.id,e.target.checked)}/><span style={{color:c.color}}><LabelIcon name={c.icon} size={16}/></span>{c.name}</label>)}
-            {!data.categories.length&&<p className="muted small">No categories yet. Create one from the Dashboard first.</p>}</div>
+            {!data.categories.length&&<p className="muted small">Create a category from the Dashboard.</p>}</div>
           <div className="dialog-separator"/>
           <button className="secondary" onClick={()=>openModal("edit-game",modal.gameId)}><Pencil size={16}/> Edit game title and cover</button>
           <button className="danger-text" onClick={()=>removeGame(modal.gameId||"")}><Trash2 size={16}/> Remove from Library and delete notes</button>
