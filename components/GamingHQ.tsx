@@ -815,7 +815,9 @@ export default function GamingHQ() {
               {!data.shelves.length&&<span className="muted small">Create a Shelf first to move categories here.</span>}
             </div>}
       </nav>
-      <div className="sidebar-bottom"><div className="local-badge"><span className="local-dot"/>{sidebarOpen&&<span>{saveStatus==="error"?"Saving error":"Guest mode · Local only"}</span>}</div></div>
+      <div className="sidebar-bottom"><div className="local-badge"><span className="local-dot"/>{sidebarOpen&&<span>{account.phase==="active"?
+                account.syncStatus==="error"?"Cloud sync error":"Account · Cloud":
+                account.user?"Connecting account":saveStatus==="error"?"Saving error":"Guest · Local"}</span>}</div></div>
     </aside>
     {mobileMenu&&<button className="mobile-overlay" aria-label="Close navigation" onClick={()=>setMobileMenu(false)}/>}
     <div className="main-shell">
@@ -825,7 +827,9 @@ export default function GamingHQ() {
         <span className="topbar-divider"/><span className="topbar-location">{section==="dashboard"?"Dashboard":section==="library"?"Library":section==="shelves"?"Shelves":section==="category"?currentCategory?.name:currentGame?.title||"Gaming HQ"}</span></div>
         <div className="topbar-right"><button type="button" className="guest-chip account-trigger"
           onClick={()=>setAccountOpen(true)} title={account.user?.email||"Sign in to sync your library"}>
-          <Cloud size={14}/>{account.phase==="active"?"Cloud synced":
+          <Cloud size={14}/>{account.phase==="active"?
+              account.syncStatus==="saving"?"Syncing…":
+              account.syncStatus==="error"?"Sync error":"Cloud saved":
             account.phase==="loading"?"Connecting…":account.phase==="conflict"?"Sync needs attention":
             account.user?"Finish setup":"Sign in"}
         </button><button className="icon-button" title="Appearance and backups" aria-label="Appearance and backups"
