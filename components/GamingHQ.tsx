@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import RichNotes from "@/components/RichNotes";
 import IGDBSearch from "@/components/IGDBSearch";
+import AccountDialog from "@/components/AccountDialog";
+import { useAccountSync } from "@/lib/useAccountSync";
 import type { IgdbGame } from "@/lib/igdb";
 import { DndContext, PointerSensor, KeyboardSensor, closestCenter, useSensor, useSensors } from "@dnd-kit/core";
 import type { DragStartEvent, DragEndEvent } from "@dnd-kit/core";
@@ -69,6 +71,8 @@ export default function GamingHQ() {
   const pathname = usePathname();
   const [data, setData] = useState<Data>(() => emptyData());
   const [ready, setReady] = useState(false);
+  const account=useAccountSync({data,setData,ready});
+  const [accountOpen,setAccountOpen]=useState(false);
   const [saveStatus, setSaveStatus] = useState<"saving" | "saved" | "error">("saved");
   const latestRevision = useRef(0);
   const [modal, setModal] = useState<Modal>(null);
@@ -144,7 +148,7 @@ export default function GamingHQ() {
     return () => { live = false; };
   }, []);
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || account.phase!=="guest") return;
     const rev = ++latestRevision.current;
     setSaveStatus("saving");
     const timeout = window.setTimeout(() => {
@@ -155,7 +159,7 @@ export default function GamingHQ() {
       });
     }, 320);
     return () => window.clearTimeout(timeout);
-  }, [data, ready]);
+  }, [data, ready, account.phase]);
 
   const change = (fn: (prev: Data) => Data) => setData(prev => fn(prev));
   const go = (href: string) => { setMobileMenu(false); router.push(href); };
@@ -387,7 +391,7 @@ export default function GamingHQ() {
       if (file.size > 25_000_000) throw new Error("Backup file is too large.");
       const imported=validateImport(JSON.parse(await file.text()));
       if (!window.confirm("REPLACE this browser's Gaming HQ library with the imported backup? Export your current library first. This cannot be undone.")) return;
-      await saveData(imported);
+      if(account.phase==="guest") await saveData(imported);
       setData(imported);
       setBackupMessage("Backup imported successfully.");
       go("/");
@@ -700,8 +704,17 @@ export default function GamingHQ() {
               </div>
             }
           </div>
-          <div className="save-indicator">{saveStatus==="saving"?<><Cloud size={15}/> Saving…</>:
-            saveStatus==="error"?<><CloudOff size={15}/> Could not save</>:<><Check size={15}/> Saved locally</>}</div>
+          <div className="save-indicator">
+            {account.phase==="active"?
+              account.syncStatus==="saving"?<><Cloud size={15}/> Syncing…</>:
+              account.syncStatus==="error"?<><CloudOff size={15}/> Sync error</>:
+              <><Check size={15}/> Saved to cloud</>:
+              account.phase==="guest"?
+                saveStatus==="saving"?<><Cloud size={15}/> Saving…</>:
+                saveStatus==="error"?<><CloudOff size={15}/> Could not save</>:
+                <><Check size={15}/> Saved locally</>:
+                <><Cloud size={15}/> Cloud pending</>}
+          </div>
         </div>
         {(!noteSelection[game.id]||noteSelection[game.id]==="current")?
           <RichNotes key={game.id+":current:"+(noteRefresh[game.id+"/current"]||0)} note={data.notes[game.id]||""}
@@ -810,7 +823,12 @@ export default function GamingHQ() {
         <button className="icon-button" aria-label="Back" title="Back" onClick={()=>router.back()}><ArrowLeft size={19}/></button>
         <button className="icon-button" aria-label="Forward" title="Forward" onClick={()=>router.forward()}><ArrowRight size={19}/></button>
         <span className="topbar-divider"/><span className="topbar-location">{section==="dashboard"?"Dashboard":section==="library"?"Library":section==="shelves"?"Shelves":section==="category"?currentCategory?.name:currentGame?.title||"Gaming HQ"}</span></div>
-        <div className="topbar-right"><span className="guest-chip"><Cloud size={14}/> Guest workspace</span><button className="icon-button" title="Appearance and backups" aria-label="Appearance and backups"
+        <div className="topbar-right"><button type="button" className="guest-chip account-trigger"
+          onClick={()=>setAccountOpen(true)} title={account.user?.email||"Sign in to sync your library"}>
+          <Cloud size={14}/>{account.phase==="active"?"Cloud synced":
+            account.phase==="loading"?"Connecting…":account.phase==="conflict"?"Sync needs attention":
+            account.user?"Finish setup":"Sign in"}
+        </button><button className="icon-button" title="Appearance and backups" aria-label="Appearance and backups"
           onClick={()=>{setShowPreferences(true);setBackupMessage("");}}><Settings2 size={18}/></button></div>
       </header>
       <main className="main-content">{!ready?<div className="loading"><span className="pulse-dot"/> Opening your space…</div>:
@@ -820,6 +838,8 @@ export default function GamingHQ() {
         <div className="blank-state"><h2>Couldn't find that page.</h2><button className="primary" onClick={()=>go("/")}>Back to dashboard</button></div>}
       </main>
     </div>
+    {(accountOpen||account.phase==="choose"||account.phase==="conflict"||account.phase==="loading")&&
+      <AccountDialog account={account} onClose={()=>setAccountOpen(false)}/>}
     {showPreferences&&<div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setShowPreferences(false);}}>
       <div className="dialog preferences-dialog" role="dialog" aria-modal="true" aria-label="Gaming HQ preferences">
         <div className="dialog-head"><h2>Preferences</h2>
@@ -835,7 +855,7 @@ export default function GamingHQ() {
               </button>)}
           </div>
           <div className="dialog-separator"/>
-          <div><div className="setting-caption">DATA & BACKUPS</div><p className="muted small">Your notes currently live in this browser, not in a cloud account. Export regularly and before switching preview URLs.</p></div>
+          <div><div className="setting-caption">DATA & BACKUPS</div><p className="muted small">Guest libraries are saved in this browser. Download a backup before clearing browser data.</p></div>
           <button className="secondary" onClick={exportBackup}>Download JSON backup</button>
           <input ref={backupInputRef} type="file" accept=".json,application/json" className="hidden-backup-input"
             onChange={e=>{const file=e.currentTarget.files?.[0];if(file)void importBackup(file);}}/>
