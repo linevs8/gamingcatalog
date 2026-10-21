@@ -32,7 +32,7 @@ const extensions = [
 export function legacyNoteToContent(note: string): string | JSONContent {
   // Existing guest notes are plain text; don't let raw '<' or HTML snippets
   // accidentally become executable markup during the editor migration.
-  if (/^\s*<(p|h[1-6]|ul|ol|blockquote|div)\b/i.test(note)) return note;
+  if (note.startsWith("rhq:")) return note.slice(4);
   const blocks = note.split(/\r?\n/).map(line => ({
     type: "paragraph",
     ...(line ? { content: [{ type: "text", text: line }] } : {})
@@ -48,7 +48,7 @@ export default function RichNotes({ note, onChange, editable = true }: Props) {
     content: legacyNoteToContent(note),
     editable,
     immediatelyRender: false,
-    onUpdate: ({ editor }) => onChange(editor.getHTML()),
+    onUpdate: ({ editor }) => onChange("rhq:" + editor.getHTML()),
     editorProps: { attributes: { class: "rich-content", "aria-label": "Your game notes" } }
   });
   if (!editor) return <div className="editor-loading">Opening your notes…</div>;
