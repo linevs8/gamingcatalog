@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Dispatch, SetStateAction } from "react";
 import type { User } from "@supabase/supabase-js";
 import type { Data } from "./data";
-import { emptyData } from "./data";
+import { emptyData, saveData } from "./data";
 import { combineLibraries } from "./mergeLibraries";
 import { libraryHasContent, readCloud, supabaseClient, supabaseConfigured, writeCloud } from "./cloud";
 
@@ -154,6 +154,7 @@ export function useAccountSync({data,setData,ready}:Props) {
     setNotice("Check your email for your sign-in link.");
   };
   const signInGoogle=async ()=>{
+    await saveData(guest.current||currentData.current);
     const client=supabaseClient();
     if(!client)throw new Error("Account sign-in is not configured.");
     const {error}=await client.auth.signInWithOAuth({
