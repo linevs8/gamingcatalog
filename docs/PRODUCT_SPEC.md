@@ -178,3 +178,7 @@ Potential later additions: 'What should I play?' picker; session snapshots; game
 ## 16. Local-first milestone implementation (October 21, 2026)
 
 Aims for a cohesive usable local-first baseline without pretending backend credentials or account systems exist. Implemented on the development branch: rich-text Current notes, optional named pages, manual checkpoints/restores, edit game metadata and quick links, guest backup import/export, themes, game/category drag-and-drop with Undo, named shelf targets, safe shelf renaming/deletion, direct New Game/From Library in categories, expanded icon palette. Next: real-provider licensing/credentials, secure authentication, cross-device sync and deeper real-browser regression testing. Historical notes remain supported as plain text until edited in the rich editor.
+
+## 17. IGDB search milestone
+
+Server-mediated Twitch OAuth client-credentials + IGDB `games` query, title/cover/release/platform preview, category-aware Add Game UI with search/manual tabs, duplicate detection using provider ID, existing-game reuse and manual fallback. External credentials remain a user setup step, never hardcoded or exposed to browser. The database remains the user's manually organized Library; IGDB is only a metadata source.

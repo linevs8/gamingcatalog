@@ -75,3 +75,11 @@ Official documentation: https://api-docs.igdb.com/
 ## Milestone status (Oct 21, 2026)
 
 Rich text via Tiptap 2, DnD Kit 6/10 with a shared pure organization data layer, and JSON data export/import are now implemented in the feature branch. Automated unit tests preserve multiple category memberships on moves and protect notes from category deletion. The automated build runs `npm run lint`, `npm run test`, `npm run build`. Cloud auth, automatic cover lookup/metadata and deployment Git linking remain deferred until configured. Preview URLs have distinct browser storage; tell testers to use backup import/export.
+
+## IGDB implementation status (October 21, 2026)
+
+The secure Next.js server route is `app/api/igdb/search/route.ts`; it exchanges Twitch confidential-app credentials for a cached OAuth access token, searches `/v4/games`, and returns a minimized/sanitized `IgdbGame[]` to the browser. UI: `components/IGDBSearch.tsx`; integrated into Add Game with manual fallback and IGDB-ID duplicate protection. Images are fetched directly from the published IGDB CDN without proxying secrets.
+
+Deployment requirement: server-only `IGDB_CLIENT_ID` + `IGDB_CLIENT_SECRET` (Vercel Preview env vars). Not set in the existing project at time of implementation. Server returns `NOT_CONFIGURED` without exposing any token, and UI continues to offer manual entry. Live upstream credentials and search responses cannot be verified before configuration.
+
+Provider caveats: official 4 req/sec and 8 parallel request limit; local per-instance request throttling is not sufficient for a popular shared multi-instance deployment. Confirm noncommercial licensing, image/attribution terms, and public access controls before using commercially.
