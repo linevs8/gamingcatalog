@@ -23,7 +23,7 @@ import {
   loadData, makeId, notePreview, saveData, validCover, validateImport, type ThemeName
 } from "@/lib/data";
 
-type Modal = null | { type: "game" | "category" | "shelf" | "link" | "organize" | "pick-library"; gameId?: string; categoryId?: string };
+type Modal = null | { type: "game" | "category" | "shelf" | "link" | "organize" | "pick-library" | "edit-game" | "edit-link"; gameId?: string; categoryId?: string; linkId?: string };
 const colors = ["#77A9F7", "#B39BFA", "#70C8BE", "#E8B878", "#F29BAD", "#96B6D1"];
 const icons = [
   "star", "gamepad", "book", "sparkle", "swords", "trophy",
@@ -169,12 +169,26 @@ export default function GamingHQ() {
     .map(m => data.games.find(g => g.id === m.gameId))
     .filter((g): g is Game => Boolean(g));
   const membershipsFor = (id: string) => data.memberships.filter(m => m.gameId === id);
-  const openModal = (type: NonNullable<Modal>["type"], gameId?: string, categoryId?: string) => {
-    setName(""); setSubtitle(""); setCoverUrl(""); setLinkUrl(""); setLinkName("");
+  const openModal = (type: NonNullable<Modal>["type"], gameId?: string, categoryId?: string, linkId?:string) => {
+    const existingGame=data.games.find(g=>g.id===gameId);
+    const existingLink=data.links.find(l=>l.id===linkId);
+    setName(type==="edit-game" ? existingGame?.title||"" : "");
+    setSubtitle(type==="edit-game" ? existingGame?.subtitle||"" : "");
+    setCoverUrl(type==="edit-game" ? existingGame?.coverUrl||"" : "");
+    setLinkUrl(type==="edit-link" ? existingLink?.url||"" : "");
+    setLinkName(type==="edit-link" ? existingLink?.title||"" : "");
     setTargetCategory(type === "game" ? categoryId || "" : "");
     setPickerQuery("");
     setCategoryColor(colors[0]); setCategoryIcon(icons[0]);
-    setError(""); setModal({ type, gameId, categoryId });
+    setError(""); setModal({ type, gameId, categoryId,linkId });
+  };
+  const saveEditedGame=()=>{
+    if(!modal?.gameId) return;
+    if(!name.trim()){setError("Enter a game title.");return;}
+    if(!validCover(coverUrl.trim())){setError("Cover must be a valid http(s) URL.");return;}
+    change(d=>({...d,games:d.games.map(g=>g.id===modal.gameId?
+      {...g,title:name.trim(),subtitle:subtitle.trim(),coverUrl:coverUrl.trim()}:g)}));
+    setModal(null);
   };
   const addGame = () => {
     const title = name.trim();
@@ -200,10 +214,34 @@ export default function GamingHQ() {
     setModal(null);
     go("/category/" + c.id);
   };
+  const renameShelf=(shelfId:string,current:string)=>{
+    const next=window.prompt("Rename shelf:",current)?.trim().slice(0,70);
+    if(!next)return;
+    change(d=>({...d,shelves:d.shelves.map(s=>s.id===shelfId?{...s,name:next}:s)}));
+  };
+  const deleteShelf=(shelfId:string)=>{
+    if(!window.confirm("Delete this shelf? Its categories will return to your Dashboard, with all games and notes preserved."))return;
+    change(d=>{
+      const others=d.categories.filter(c=>c.location==="dashboard").length;
+      let offset=0;
+      return {...d,shelves:d.shelves.filter(s=>s.id!==shelfId),
+        categories:d.categories.map(c=>c.location===shelfId?{...c,location:"dashboard",order:others+(offset++)}:c)};
+    });
+  };
   const addShelf = () => {
     if (!name.trim()) { setError("Name your shelf."); return; }
     change(d => ({ ...d, shelves: [...d.shelves, { id: makeId(), name: name.trim(), order: d.shelves.length }] }));
     setModal(null);
+  };
+  const saveEditedLink=()=>{
+    if(!modal?.linkId) return;
+    try{
+      const uri=new URL(linkUrl.trim());
+      if(!["http:","https:"].includes(uri.protocol))throw new Error();
+      change(d=>({...d,links:d.links.map(l=>l.id===modal.linkId?
+        {...l,url:uri.toString(),title:linkName.trim()||uri.hostname}:l)}));
+      setModal(null);
+    }catch {setError("Enter a valid http(s) URL.");}
   };
   const addLink = () => {
     if (!modal?.gameId) return;
@@ -473,14 +511,19 @@ export default function GamingHQ() {
       {!data.shelves.length?<div className="blank-state compact"><div className="blank-symbol"><Archive size={30}/></div><h2>A little room to breathe.</h2>
       <p>Shelves hold categories you don't need on your main dashboard. Create one whenever you're ready.</p>
       <button className="primary" onClick={()=>openModal("shelf")}><Plus size={17}/> Create shelf</button></div>:
-      <div className="shelf-grid">{[...data.shelves].sort((a,b)=>a.order-b.order).map(s=><div className="shelf-card" key={s.id}>
-        <div className="shelf-heading"><Archive size={19}/><strong>{s.name}</strong><span className="muted small">{shelfCategories(s.id).length} categories</span></div>
+      <div className="shelf-grid">{[...data.shelves].sort((a,b)=>a.order-b.order).map(s=>
+        <DropTarget id={"target-shelf/"+s.id} data={{kind:"shelf-target",shelfId:s.id}} key={s.id}>
+        <div className="shelf-card">
+        <div className="shelf-heading"><Archive size={19}/><strong>{s.name}</strong><span className="muted small">{shelfCategories(s.id).length} categories</span>
+          <button className="icon-button" title="Rename shelf" aria-label={"Rename "+s.name} onClick={()=>renameShelf(s.id,s.name)}><Pencil size={15}/></button>
+          <button className="icon-button" title="Delete shelf" aria-label={"Delete "+s.name} onClick={()=>deleteShelf(s.id)}><Trash2 size={15}/></button>
+        </div>
         {shelfCategories(s.id).map(c=><DragItem key={c.id} id={"shelf-category/"+c.id}
           data={{kind:"category",categoryId:c.id}}>
           <Link className="shelf-category" href={"/category/"+c.id}><LabelIcon name={c.icon}/><span>{c.name}</span><ChevronRight size={16}/></Link>
         </DragItem>)}
         {!shelfCategories(s.id).length&&<p className="muted small">Move a category here using its settings.</p>}
-      </div>)}</div>}
+      </div></DropTarget>)}</div>}
     </div>;
   }
 
@@ -611,7 +654,9 @@ export default function GamingHQ() {
         <button className="secondary small-button" onClick={()=>openModal("link",game.id)}><Plus size={16}/> Add link</button></div>
         {gameLinks.length?<div className="quick-links">{gameLinks.map(l=><div className="quick-link" key={l.id}>
           <a href={l.url} target="_blank" rel="noopener noreferrer"><Link2 size={16}/><span>{l.title}</span><ExternalLink size={14}/></a>
-          <button title={"Remove "+l.title} aria-label={"Remove "+l.title} onClick={()=>change(d=>({...d,links:d.links.filter(x=>x.id!==l.id)}))}><X size={15}/></button>
+          <button title={"Edit "+l.title} aria-label={"Edit "+l.title} onClick={()=>openModal("edit-link",game.id,undefined,l.id)}><Pencil size={15}/></button>
+          <button title={"Remove "+l.title} aria-label={"Remove "+l.title}
+            onClick={()=>{if(window.confirm("Remove this quick link?"))change(d=>({...d,links:d.links.filter(x=>x.id!==l.id)}));}}><X size={15}/></button>
         </div>)}</div>:<p className="muted small">Pin a walkthrough, wiki or guide here so it's always one click away.</p>}
       </section>
     </div>;
@@ -724,14 +769,16 @@ export default function GamingHQ() {
     </div>}
     {modal&&<div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setModal(null)}}>
       <div className="dialog" role="dialog" aria-modal="true" aria-label={modal.type==="organize"?"Organize game":"Add new item"}>
-        <div className="dialog-head"><h2>{modal.type==="game"?"Add a game":modal.type==="category"?"New category":modal.type==="shelf"?"New shelf":
-          modal.type==="link"?"Add quick link":modal.type==="pick-library"?"Add from Library":"Organize game"}</h2><button className="icon-button" title="Close" onClick={()=>setModal(null)}><X size={20}/></button></div>
-        {modal.type==="game"&&<div className="dialog-fields"><p className="muted small">Manual entry for now. Automatic game search is planned next.</p>
+        <div className="dialog-head"><h2>{modal.type==="game"?"Add a game":modal.type==="edit-game"?"Edit game":
+          modal.type==="category"?"New category":modal.type==="shelf"?"New shelf":
+          modal.type==="link"?"Add quick link":modal.type==="edit-link"?"Edit quick link":
+          modal.type==="pick-library"?"Add from Library":"Organize game"}</h2><button className="icon-button" title="Close" onClick={()=>setModal(null)}><X size={20}/></button></div>
+        {(modal.type==="game"||modal.type==="edit-game")&&<div className="dialog-fields"><p className="muted small">Manual entry for now. Automatic game search is planned next.</p>
           <label>Game title<input autoFocus value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Kingdom Hearts Final Mix"/></label>
           <label>Subtitle / details <span className="muted">(optional)</span><input value={subtitle} onChange={e=>setSubtitle(e.target.value)} placeholder="e.g. PlayStation 2 · Action RPG"/></label>
           <label>Cover image URL <span className="muted">(optional)</span><input value={coverUrl} onChange={e=>setCoverUrl(e.target.value)} placeholder="https://…"/></label>
-          <label>Add to a category <span className="muted">(optional)</span><select value={targetCategory} onChange={e=>setTargetCategory(e.target.value)}>
-            <option value="">Only add to Library</option>{data.categories.map(c=><option value={c.id} key={c.id}>{c.name}</option>)}</select></label></div>}
+          {modal.type==="game"&&<label>Add to a category <span className="muted">(optional)</span><select value={targetCategory} onChange={e=>setTargetCategory(e.target.value)}>
+            <option value="">Only add to Library</option>{data.categories.map(c=><option value={c.id} key={c.id}>{c.name}</option>)}</select></label>}</div>}
         {modal.type==="category"&&<div className="dialog-fields"><label>Category name<input autoFocus value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Priority, Solo, Multiplayer"/></label>
           <label>Location<select value={targetCategory} onChange={e=>setTargetCategory(e.target.value)}><option value="">Dashboard</option>{data.shelves.map(s=><option key={s.id} value={s.id}>Shelf: {s.name}</option>)}</select></label>
           <label>Accent color</label><div className="swatches">{colors.map(c=><button className={"swatch "+(categoryColor===c?"chosen":"")} style={{background:c}} key={c}
@@ -739,7 +786,7 @@ export default function GamingHQ() {
           <label>Icon</label><div className="icon-choices">{icons.map(i=><button className={i===categoryIcon?"chosen":""} key={i} onClick={()=>setCategoryIcon(i)}><LabelIcon name={i}/></button>)}</div></div>}
         {modal.type==="shelf"&&<div className="dialog-fields"><label>Shelf name<input autoFocus value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Backlog, Completed, Wishlist"/></label>
           <p className="muted small">You can move existing categories into this shelf from their category settings.</p></div>}
-        {modal.type==="link"&&<div className="dialog-fields"><label>URL<input autoFocus value={linkUrl} onChange={e=>setLinkUrl(e.target.value)} placeholder="https://…"/></label>
+        {(modal.type==="link"||modal.type==="edit-link")&&<div className="dialog-fields"><label>URL<input autoFocus value={linkUrl} onChange={e=>setLinkUrl(e.target.value)} placeholder="https://…"/></label>
           <label>Title <span className="muted">(optional)</span><input value={linkName} onChange={e=>setLinkName(e.target.value)} placeholder="e.g. Walkthrough"/></label></div>}
         {modal.type==="pick-library"&&<div className="dialog-fields">
           <p className="muted small">Choose games for {data.categories.find(c=>c.id===modal.categoryId)?.name || "this category"}. Already-added games remain in your Library and any other categories.</p>
@@ -773,13 +820,18 @@ export default function GamingHQ() {
             onChange={e=>toggleMembership(modal.gameId||"",c.id,e.target.checked)}/><span style={{color:c.color}}><LabelIcon name={c.icon} size={16}/></span>{c.name}</label>)}
             {!data.categories.length&&<p className="muted small">No categories yet. Create one from the Dashboard first.</p>}</div>
           <div className="dialog-separator"/>
+          <button className="secondary" onClick={()=>openModal("edit-game",modal.gameId)}><Pencil size={16}/> Edit game title and cover</button>
           <button className="danger-text" onClick={()=>removeGame(modal.gameId||"")}><Trash2 size={16}/> Remove from Library and delete notes</button>
         </div>}
         {error&&<p role="alert" className="field-error">{error}</p>}
         <div className="dialog-footer"><button className="secondary" onClick={()=>setModal(null)}>
           {modal.type==="organize"||modal.type==="pick-library"?"Done":"Cancel"}</button>
-          {modal.type!=="organize"&&modal.type!=="pick-library"&&<button className="primary" onClick={modal.type==="game"?addGame:modal.type==="category"?addCategory:modal.type==="shelf"?addShelf:addLink}>
-            <Plus size={16}/>{modal.type==="game"?"Add game":modal.type==="category"?"Create category":modal.type==="shelf"?"Create shelf":"Add link"}</button>}</div>
+          {modal.type!=="organize"&&modal.type!=="pick-library"&&<button className="primary" onClick={modal.type==="game"?addGame:modal.type==="edit-game"?saveEditedGame:
+            modal.type==="category"?addCategory:modal.type==="shelf"?addShelf:
+            modal.type==="edit-link"?saveEditedLink:addLink}>
+            <Plus size={16}/>{modal.type==="game"?"Add game":modal.type==="edit-game"?"Save game":
+            modal.type==="category"?"Create category":modal.type==="shelf"?"Create shelf":
+            modal.type==="edit-link"?"Save link":"Add link"}</button>}</div>
       </div>
     </div>}
     {undoData&&<div className="undo-toast" role="status">
