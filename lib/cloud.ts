@@ -42,7 +42,7 @@ export async function readCloud(userId: string): Promise<CloudRecord | null> {
 }
 
 export class SyncConflict extends Error {
-  constructor() { super("Your cloud library changed on another device. Your changes are still on this screen. Download a backup, then reload to resolve."); }
+  constructor() { super("Your cloud library changed on another device. Your changes are still on this screen. Download a backup, then reload to resolve."); this.name="SyncConflict"; }
 }
 
 export async function writeCloud(userId:string,snapshot:Data,previousRevision:number|null):Promise<number> {
