@@ -18,6 +18,7 @@ export type Shelf = { id: string; name: string; order: number };
 export type Membership = { categoryId: string; gameId: string; order: number };
 export type QuickLink = { id: string; gameId: string; title: string; url: string; order: number };
 export type NotePage = { id: string; title: string; content: string; order: number };
+export type NoteRevision = { id: string; content: string; createdAt: number };
 export type ThemeName = "midnight" | "obsidian" | "violet" | "teal";
 export type Data = {
   version: 1;
@@ -29,11 +30,12 @@ export type Data = {
   /** Optional for compatibility with existing saved guest libraries. */
   noteTitles?: Record<string, string>;
   notePages?: Record<string, NotePage[]>;
+  noteRevisions?: Record<string, NoteRevision[]>;
   theme?: ThemeName;
   links: QuickLink[];
 };
 export const emptyData = (): Data => ({
-  version: 1, games: [], categories: [], shelves: [], memberships: [], notes: {}, noteTitles: {}, notePages: {}, theme: "midnight", links: []
+  version: 1, games: [], categories: [], shelves: [], memberships: [], notes: {}, noteTitles: {}, notePages: {}, noteRevisions: {}, theme: "midnight", links: []
 });
 
 const DATABASE = "gaming-hq-local";
@@ -153,9 +155,22 @@ export function validateImport(raw: unknown): Data {
   for(const c of d.categories) {
     if (!c || typeof c.id !== "string" || typeof c.name !== "string" || typeof c.location !== "string") throw new Error("Invalid category record in backup.");
   }
+  for(const link of d.links) {
+    if(!link || typeof link.id !== "string" || typeof link.gameId !== "string" ||
+       typeof link.title !== "string" || typeof link.url !== "string")throw new Error("Invalid quick link in backup.");
+    try{
+      const url=new URL(link.url);
+      if(!["https:","http:"].includes(url.protocol))throw new Error();
+    }catch{throw new Error("Unsafe quick-link URL in backup.");}
+  }
+  if(Object.values(d.notes).some(value=>typeof value!=="string"||value.length>2_000_000))
+    throw new Error("Invalid or oversized notes in backup.");
+  if(d.notePages && Object.values(d.notePages).some(pages=>!Array.isArray(pages)||pages.length>100||
+    pages.some(p=>!p||typeof p.id!=="string"||typeof p.title!=="string"||typeof p.content!=="string"||p.content.length>2_000_000)))
+    throw new Error("Invalid notes pages in backup.");
   return {
     ...emptyData(), ...d,
-    noteTitles: d.noteTitles || {}, notePages: d.notePages || {},
+    noteTitles: d.noteTitles || {}, notePages: d.notePages || {}, noteRevisions: d.noteRevisions || {},
     theme: ["midnight","obsidian","violet","teal"].includes(d.theme || "") ? d.theme : "midnight"
   } as Data;
 }
