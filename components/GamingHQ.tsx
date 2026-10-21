@@ -3,6 +3,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import RichNotes from "@/components/RichNotes";
+import { DndContext, PointerSensor, KeyboardSensor, closestCenter, useSensor, useSensors } from "@dnd-kit/core";
+import type { DragStartEvent, DragEndEvent } from "@dnd-kit/core";
+import { SortableContext, rectSortingStrategy, verticalListSortingStrategy, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
+import { SortableItem, DragItem, DropTarget } from "@/components/DragItems";
+import type { DragInfo, TargetInfo } from "@/components/DragItems";
+import { moveGamePlacement, reorderCategories, placeCategory } from "@/lib/organization";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Archive, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BookOpen, Check,
@@ -86,6 +92,18 @@ export default function GamingHQ() {
   const backupInputRef = useRef<HTMLInputElement>(null);
   const [showPreferences,setShowPreferences] = useState(false);
   const [backupMessage,setBackupMessage] = useState("");
+  const sensors=useSensors(
+    useSensor(PointerSensor,{activationConstraint:{delay:240,tolerance:6}}),
+    useSensor(KeyboardSensor,{coordinateGetter:sortableKeyboardCoordinates})
+  );
+  const [dragging,setDragging]=useState<DragInfo|null>(null);
+  const [undoData,setUndoData]=useState<Data|null>(null);
+  const [undoLabel,setUndoLabel]=useState("");
+  useEffect(()=>{
+    if(!undoData)return;
+    const timeout=window.setTimeout(()=>setUndoData(null),7000);
+    return ()=>window.clearTimeout(timeout);
+  },[undoData]);
   const [editingNoteTitle, setEditingNoteTitle] = useState<string | null>(null);
   const [noteTitleDraft, setNoteTitleDraft] = useState("");
   const cancelNoteTitleSave = useRef(false);
@@ -281,6 +299,46 @@ export default function GamingHQ() {
     } catch(e) {
       setBackupMessage(e instanceof Error?e.message:"Couldn't import that backup.");
     } finally { if(backupInputRef.current)backupInputRef.current.value=""; }
+  };
+  const handleDragStart=(event:DragStartEvent)=>{
+    setDragging((event.active.data.current as DragInfo|undefined)||null);
+  };
+  const handleDragEnd=(event:DragEndEvent)=>{
+    setDragging(null);
+    const from=event.active.data.current as DragInfo|undefined;
+    const to=event.over?.data.current as TargetInfo|undefined;
+    if(!from||!to) return;
+    let next=data; let description="";
+    if(from.kind==="game") {
+      if(to.kind==="game") {
+        if(from.categoryId==="library"&&to.categoryId==="library")return;
+        next=moveGamePlacement(data,from.categoryId,from.gameId,
+          to.categoryId==="library"?null:to.categoryId,to.gameId);
+        description="Game moved";
+      } else if(to.kind==="category-target" || to.kind==="category") {
+        next=moveGamePlacement(data,from.categoryId,from.gameId,to.categoryId);
+        description="Game moved into category";
+      } else if(to.kind==="library-target") {
+        next=moveGamePlacement(data,from.categoryId,from.gameId,null);
+        description="Game removed from category";
+      }
+    } else if(from.kind==="category") {
+      if(to.kind==="category" || to.kind==="category-target") {
+        next=reorderCategories(data,from.categoryId,to.categoryId);
+        description="Categories reordered";
+      } else if(to.kind==="shelf-target") {
+        next=placeCategory(data,from.categoryId,to.shelfId);
+        description="Category moved to shelf";
+      } else if(to.kind==="dashboard-target") {
+        next=placeCategory(data,from.categoryId,"dashboard");
+        description="Category moved to Dashboard";
+      }
+    }
+    if(next!==data){
+      setUndoData(data);
+      setUndoLabel(description);
+      setData(next);
+    }
   };
   const removeGame = (id: string) => {
     if (!window.confirm("Remove this game from your Library? Its notes and links will be deleted. This cannot be undone.")) return;
@@ -534,7 +592,10 @@ export default function GamingHQ() {
     </div>;
   }
 
-  return <div className={"app-shell theme-"+(data.theme||"midnight")}>
+  return <DndContext sensors={sensors} collisionDetection={closestCenter}
+      onDragStart={handleDragStart} onDragEnd={handleDragEnd}
+      onDragCancel={()=>setDragging(null)}>
+    <div className={"app-shell theme-"+(data.theme||"midnight")}>
     <aside className={"sidebar "+(!sidebarOpen?"collapsed ":"")+(mobileMenu?"mobile-open":"")}>
       <div className="brand">
         {sidebarOpen ? (
@@ -678,5 +739,10 @@ export default function GamingHQ() {
             <Plus size={16}/>{modal.type==="game"?"Add game":modal.type==="category"?"Create category":modal.type==="shelf"?"Create shelf":"Add link"}</button>}</div>
       </div>
     </div>}
-  </div>;
+    {undoData&&<div className="undo-toast" role="status">
+      <span>{undoLabel}</span><button type="button" onClick={()=>{setData(undoData);setUndoData(null);}}>Undo</button>
+      <button type="button" aria-label="Dismiss undo" onClick={()=>setUndoData(null)}><X size={14}/></button>
+    </div>}
+  </div>
+  </DndContext>;
 }
