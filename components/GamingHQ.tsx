@@ -356,24 +356,33 @@ export default function GamingHQ() {
   function CategoryRow({ category, index, length }: { category: Category; index: number; length: number }) {
     return (
       <div className="side-category">
-        <button className={"side-category-label " + (currentId===category.id?"active":"")}
-          onClick={()=>go("/category/"+category.id)} title={category.name}>
-          <span style={{color:category.color}}><LabelIcon name={category.icon} size={16}/></span>
-          <span className="truncate">{category.name}</span>
-        </button>
+        <DropTarget id={"target-category/"+category.id} data={{kind:"category-target",categoryId:category.id}}>
+          <button className={"side-category-label " + (currentId===category.id?"active":"")}
+            onClick={()=>go("/category/"+category.id)} title={category.name}>
+            <span style={{color:category.color}}><LabelIcon name={category.icon} size={16}/></span>
+            <span className="truncate">{category.name}</span>
+          </button>
+        </DropTarget>
         <button className="side-disclose" aria-label={"Show games in "+category.name}
           aria-expanded={expanded===category.id}
           onClick={()=>setExpanded(v=>v===category.id?null:category.id)}>
           {expanded===category.id?<ChevronDown size={15}/>:<ChevronRight size={15}/>}
         </button>
         {expanded===category.id && <div className="side-sublist">
-          {gamesIn(category.id).map((g,i)=><div className="side-game" key={g.id}>
+          <SortableContext items={gamesIn(category.id).map(g=>"side-game/"+category.id+"/"+g.id)}
+            strategy={verticalListSortingStrategy}>
+          {gamesIn(category.id).map((g,i)=><SortableItem
+            id={"side-game/"+category.id+"/"+g.id} key={g.id}
+            data={{kind:"game",categoryId:category.id,gameId:g.id}}>
+            <div className="side-game">
             <button onClick={()=>go("/game/"+g.id)} className="truncate" title={g.title}>{g.title}</button>
             <span className="side-controls">
               <button aria-label={"Move "+g.title+" up"} disabled={i===0} onClick={()=>moveGame(category.id,g.id,-1)}><ArrowUp size={13}/></button>
               <button aria-label={"Move "+g.title+" down"} disabled={i===gamesIn(category.id).length-1} onClick={()=>moveGame(category.id,g.id,1)}><ArrowDown size={13}/></button>
             </span>
-          </div>)}
+            </div>
+          </SortableItem>)}
+          </SortableContext>
           {!gamesIn(category.id).length&&<div className="muted small pad-small">No games yet</div>}
           <div className="side-move">
             <button title="Move category up" disabled={index===0} onClick={()=>moveCategory(category,-1)}><ArrowUp size={13}/> Category</button>
@@ -412,9 +421,11 @@ export default function GamingHQ() {
         <button className="primary" onClick={()=>openModal("category")}><Plus size={17}/> Create your first category</button>
         <div className="muted small">Or <Link href="/library">add a game to your Library</Link> first.</div>
       </div> :
+      <SortableContext items={dashboardCategories.map(c=>"category/"+c.id)} strategy={rectSortingStrategy}>
       <div className="category-grid">{dashboardCategories.map(c=>{
         const games=gamesIn(c.id), top=games.slice(0,4);
-        return <Link className="category-preview" href={"/category/"+c.id} key={c.id} style={{"--category-accent":c.color} as React.CSSProperties}>
+        return <SortableItem id={"category/"+c.id} data={{kind:"category",categoryId:c.id}} key={c.id}>
+          <Link className="category-preview" href={"/category/"+c.id} style={{"--category-accent":c.color} as React.CSSProperties}>
           <div className="category-head">
             <span className="category-icon" style={{color:c.color,background:c.color+"18"}}><LabelIcon name={c.icon}/></span>
             <div><h2>{c.name}</h2><div className="muted small">{games.length} {games.length===1?"game":"games"}</div></div>
@@ -424,8 +435,9 @@ export default function GamingHQ() {
             {Array.from({length:Math.max(0,4-top.length)},(_,i)=><div key={i} className="preview-empty"/>)}
           </div>
           <div className="category-foot"><span>{games.length>4?"+"+(games.length-4)+" more":"Your top-ranked games"}</span><span>Open category <ArrowRight size={14}/></span></div>
-        </Link>;
-      })}</div>}
+          </Link>
+        </SortableItem>;
+      })}</div></SortableContext>}
     </div>;
   }
 
@@ -446,7 +458,9 @@ export default function GamingHQ() {
         <button className="primary" onClick={()=>openModal("game")}><Plus size={17}/> Add a game</button>
       </div>:!filtered.length?<div className="empty-search">No games match “{query}”.</div>:
       <div className={libraryView==="gallery"?"games-grid":"games-list"}>
-        {filtered.map(g=><div key={g.id}>{GameCard({game:g,list:libraryView==="list",organize:true})}</div>)}
+        {filtered.map(g=><DragItem key={g.id} id={"library-game/"+g.id} data={{kind:"game",categoryId:"library",gameId:g.id}}>
+          {GameCard({game:g,list:libraryView==="list",organize:true})}
+        </DragItem>)}
       </div>}
     </div>;
   }
@@ -461,7 +475,10 @@ export default function GamingHQ() {
       <button className="primary" onClick={()=>openModal("shelf")}><Plus size={17}/> Create shelf</button></div>:
       <div className="shelf-grid">{[...data.shelves].sort((a,b)=>a.order-b.order).map(s=><div className="shelf-card" key={s.id}>
         <div className="shelf-heading"><Archive size={19}/><strong>{s.name}</strong><span className="muted small">{shelfCategories(s.id).length} categories</span></div>
-        {shelfCategories(s.id).map(c=><Link className="shelf-category" key={c.id} href={"/category/"+c.id}><LabelIcon name={c.icon}/><span>{c.name}</span><ChevronRight size={16}/></Link>)}
+        {shelfCategories(s.id).map(c=><DragItem key={c.id} id={"shelf-category/"+c.id}
+          data={{kind:"category",categoryId:c.id}}>
+          <Link className="shelf-category" href={"/category/"+c.id}><LabelIcon name={c.icon}/><span>{c.name}</span><ChevronRight size={16}/></Link>
+        </DragItem>)}
         {!shelfCategories(s.id).length&&<p className="muted small">Move a category here using its settings.</p>}
       </div>)}</div>}
     </div>;
@@ -503,8 +520,16 @@ export default function GamingHQ() {
             <Library size={17}/> From Library
           </button>
         </div>
-      </div>:<><div className="subtle-hint"><GripVertical size={15}/> Ranking follows the order you set. Use the sidebar arrows to reorder in this first slice; hold-and-drag comes next.</div>
-        <div className={category.view==="gallery"?"games-grid":"games-list"}>{games.map(g=><div key={g.id}>{GameCard({game:g,list:category.view==="list",organize:true})}</div>)}</div></>}
+      </div>:<><div className="subtle-hint"><GripVertical size={15}/> Hold a game briefly, then drag to reorder. You can also move games into another category using the sidebar.</div>
+        <SortableContext items={games.map(g=>"game/"+category.id+"/"+g.id)}
+            strategy={category.view==="gallery"?rectSortingStrategy:verticalListSortingStrategy}>
+          <div className={category.view==="gallery"?"games-grid":"games-list"}>
+            {games.map(g=><SortableItem id={"game/"+category.id+"/"+g.id} key={g.id}
+              data={{kind:"game",categoryId:category.id,gameId:g.id}}>
+              {GameCard({game:g,list:category.view==="list",organize:true})}
+            </SortableItem>)}
+          </div>
+        </SortableContext></>}
     </div>;
   }
 
@@ -616,8 +641,12 @@ export default function GamingHQ() {
         <div className="nav-label">WORKSPACE</div>
         {sidebarOpen ? (
           <>
-            <Link className={"nav-item "+(section==="dashboard"?"nav-active":"")} href="/"><LayoutDashboard size={18}/><span>Dashboard</span></Link>
-            <Link className={"nav-item "+(section==="library"?"nav-active":"")} href="/library"><Library size={18}/><span>All Games</span></Link>
+            <DropTarget id="target-dashboard" data={{kind:"dashboard-target"}}>
+              <Link className={"nav-item "+(section==="dashboard"?"nav-active":"")} href="/"><LayoutDashboard size={18}/><span>Dashboard</span></Link>
+            </DropTarget>
+            <DropTarget id="target-library" data={{kind:"library-target"}}>
+              <Link className={"nav-item "+(section==="library"?"nav-active":"")} href="/library"><Library size={18}/><span>All Games</span></Link>
+            </DropTarget>
             <Link className={"nav-item shelf-nav "+(section==="shelves"?"nav-active":"")} href="/shelves"><Archive size={18}/><span>Shelves</span></Link>
           </>
         ) : (
@@ -632,9 +661,23 @@ export default function GamingHQ() {
         )}
         {sidebarOpen&&<><div className="nav-label nav-label-categories">YOUR CATEGORIES
           <button title="New category" aria-label="New category" onClick={()=>openModal("category")}><Plus size={16}/></button></div>
-          <div className="category-nav">{dashboardCategories.map((c,i)=><div key={c.id}>{CategoryRow({category:c,index:i,length:dashboardCategories.length})}</div>)}
+          <SortableContext items={dashboardCategories.map(c=>"side-category/"+c.id)} strategy={verticalListSortingStrategy}>
+          <div className="category-nav">{dashboardCategories.map((c,i)=>
+            <SortableItem id={"side-category/"+c.id} key={c.id}
+              data={{kind:"category",categoryId:c.id}}>
+              {CategoryRow({category:c,index:i,length:dashboardCategories.length})}
+            </SortableItem>)}
             {!dashboardCategories.length&&<div className="nav-empty">Your categories will appear here.</div>}
-          </div></>}
+          </div></SortableContext></>}
+          {sidebarOpen&&dragging?.kind==="category"&&
+            <div className="drag-shelf-targets">
+              <div className="nav-label">MOVE CATEGORY TO</div>
+              {data.shelves.map(s=><DropTarget key={s.id} id={"target-shelf/"+s.id}
+                data={{kind:"shelf-target",shelfId:s.id}} className="sidebar-drop">
+                <Archive size={15}/> {s.name}
+              </DropTarget>)}
+              {!data.shelves.length&&<span className="muted small">Create a Shelf first to move categories here.</span>}
+            </div>}
       </nav>
       <div className="sidebar-bottom"><div className="local-badge"><span className="local-dot"/>{sidebarOpen&&<span>{saveStatus==="error"?"Saving error":"Guest mode · Local only"}</span>}</div></div>
     </aside>
