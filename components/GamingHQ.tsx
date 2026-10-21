@@ -534,7 +534,7 @@ export default function GamingHQ() {
     </div>;
   }
 
-  return <div className="app-shell">
+  return <div className={"app-shell theme-"+(data.theme||"midnight")}>
     <aside className={"sidebar "+(!sidebarOpen?"collapsed ":"")+(mobileMenu?"mobile-open":"")}>
       <div className="brand">
         {sidebarOpen ? (
@@ -583,7 +583,8 @@ export default function GamingHQ() {
         <button className="icon-button" aria-label="Back" title="Back" onClick={()=>router.back()}><ArrowLeft size={19}/></button>
         <button className="icon-button" aria-label="Forward" title="Forward" onClick={()=>router.forward()}><ArrowRight size={19}/></button>
         <span className="topbar-divider"/><span className="topbar-location">{section==="dashboard"?"Dashboard":section==="library"?"Library":section==="shelves"?"Shelves":section==="category"?currentCategory?.name:currentGame?.title||"Gaming HQ"}</span></div>
-        <div className="topbar-right"><span className="guest-chip"><Cloud size={14}/> Guest workspace</span><button className="icon-button" title="Settings coming later" aria-label="Settings coming later" disabled><Settings2 size={18}/></button></div>
+        <div className="topbar-right"><span className="guest-chip"><Cloud size={14}/> Guest workspace</span><button className="icon-button" title="Appearance and backups" aria-label="Appearance and backups"
+          onClick={()=>{setShowPreferences(true);setBackupMessage("");}}><Settings2 size={18}/></button></div>
       </header>
       <main className="main-content">{!ready?<div className="loading"><span className="pulse-dot"/> Opening your space…</div>:
         section==="dashboard"?Dashboard():section==="library"?LibraryScreen():section==="shelves"?ShelvesScreen():
@@ -592,6 +593,31 @@ export default function GamingHQ() {
         <div className="blank-state"><h2>Couldn't find that page.</h2><button className="primary" onClick={()=>go("/")}>Back to dashboard</button></div>}
       </main>
     </div>
+    {showPreferences&&<div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setShowPreferences(false);}}>
+      <div className="dialog preferences-dialog" role="dialog" aria-modal="true" aria-label="Gaming HQ preferences">
+        <div className="dialog-head"><h2>Preferences</h2>
+          <button className="icon-button" aria-label="Close preferences" onClick={()=>setShowPreferences(false)}><X size={20}/></button></div>
+        <div className="dialog-fields">
+          <div><div className="setting-caption">APPEARANCE</div><p className="muted small">Choose your home base's look.</p></div>
+          <div className="theme-grid">
+            {([["midnight","Midnight Blue"],["obsidian","Obsidian"],["violet","Dusk Violet"],["teal","Deep Teal"]] as [ThemeName,string][]).map(([id,label])=>
+              <button className={"theme-choice theme-preview-"+id+((data.theme||"midnight")===id?" chosen":"")}
+                key={id} onClick={()=>change(d=>({...d,theme:id}))}>
+                <span className="theme-preview-bar"/><strong>{label}</strong>
+                {(data.theme||"midnight")===id&&<Check size={15}/>}
+              </button>)}
+          </div>
+          <div className="dialog-separator"/>
+          <div><div className="setting-caption">DATA & BACKUPS</div><p className="muted small">Your notes currently live in this browser, not in a cloud account. Export regularly and before switching preview URLs.</p></div>
+          <button className="secondary" onClick={exportBackup}>Download JSON backup</button>
+          <input ref={backupInputRef} type="file" accept=".json,application/json" className="hidden-backup-input"
+            onChange={e=>{const file=e.currentTarget.files?.[0];if(file)void importBackup(file);}}/>
+          <button className="secondary" onClick={()=>backupInputRef.current?.click()}>Import backup (replace this library)</button>
+          {backupMessage&&<p role="status" className="muted small">{backupMessage}</p>}
+        </div>
+        <div className="dialog-footer"><button className="primary" onClick={()=>setShowPreferences(false)}>Done</button></div>
+      </div>
+    </div>}
     {modal&&<div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setModal(null)}}>
       <div className="dialog" role="dialog" aria-modal="true" aria-label={modal.type==="organize"?"Organize game":"Add new item"}>
         <div className="dialog-head"><h2>{modal.type==="game"?"Add a game":modal.type==="category"?"New category":modal.type==="shelf"?"New shelf":
