@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import RichNotes from "@/components/RichNotes";
+import IGDBSearch from "@/components/IGDBSearch";
+import type { IgdbGame } from "@/lib/igdb";
 import { DndContext, PointerSensor, KeyboardSensor, closestCenter, useSensor, useSensors } from "@dnd-kit/core";
 import type { DragStartEvent, DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, rectSortingStrategy, verticalListSortingStrategy, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
@@ -71,6 +73,7 @@ export default function GamingHQ() {
   const [saveStatus, setSaveStatus] = useState<"saving" | "saved" | "error">("saved");
   const latestRevision = useRef(0);
   const [modal, setModal] = useState<Modal>(null);
+  const [addGameMode,setAddGameMode] = useState<"search" | "manual">("search");
   const [name, setName] = useState("");
   const [subtitle, setSubtitle] = useState("");
   const [coverUrl, setCoverUrl] = useState("");
@@ -216,7 +219,9 @@ export default function GamingHQ() {
     setTargetCategory(type === "game" ? categoryId || "" : "");
     setPickerQuery("");
     setCategoryColor(colors[0]); setCategoryIcon(icons[0]);
-    setError(""); setModal({ type, gameId, categoryId,linkId });
+    setError("");
+    if (type === "game") setAddGameMode("search");
+    setModal({ type, gameId, categoryId,linkId });
   };
   const saveEditedGame=()=>{
     if(!modal?.gameId) return;
@@ -224,6 +229,29 @@ export default function GamingHQ() {
     if(!validCover(coverUrl.trim())){setError("Cover must be a valid http(s) URL.");return;}
     change(d=>({...d,games:d.games.map(g=>g.id===modal.gameId?
       {...g,title:name.trim(),subtitle:subtitle.trim(),coverUrl:coverUrl.trim(),description:descriptionDraft}:g)}));
+    setModal(null);
+  };
+  const addIgdbGame = (item: IgdbGame) => {
+    const existing = data.games.find(g=>g.provider==="igdb"&&g.providerId===item.providerId);
+    const categoryId=targetCategory;
+    if (existing) {
+      if (categoryId) toggleMembership(existing.id,categoryId,true);
+      else go("/game/"+existing.id);
+      setModal(null);
+      return;
+    }
+    const id=makeId();
+    const game:Game = {
+      id, title:item.title, subtitle:item.subtitle, coverUrl:item.coverUrl,
+      createdAt:Date.now(), provider:"igdb", providerId:item.providerId,
+      catalogId:"gamedb:"+item.providerId
+    };
+    change(d=>({
+      ...d, games:[...d.games,game],
+      memberships:categoryId && d.categories.some(c=>c.id===categoryId)?
+        [...d.memberships,{gameId:id,categoryId,order:d.memberships.filter(m=>m.categoryId===categoryId).length}]:
+        d.memberships
+    }));
     setModal(null);
   };
   const addGame = () => {
@@ -241,10 +269,15 @@ export default function GamingHQ() {
     setModal(null);
   };
   const importCatalogGame = (entry: CatalogGame) => {
-    const existing = data.games.find(g => g.catalogId === entry.id);
-    if (existing) { setModal(null); go("/game/" + existing.id); return; }
-    const game: Game = {id:makeId(),catalogId:entry.id,title:entry.title,subtitle:entry.subtitle,
-      coverUrl:entry.coverUrl,description:entry.description,createdAt:Date.now()};
+    const igdbId=Number(entry.id.replace(/^gamedb:/,""));
+    const existing = data.games.find(g=>g.catalogId===entry.id || (g.provider==="igdb"&&g.providerId===igdbId));
+    if (existing) {
+      if (modal?.categoryId) toggleMembership(existing.id,modal.categoryId,true);
+      setModal(null); go("/game/"+existing.id); return;
+    }
+    const game: Game = {id:makeId(),catalogId:entry.id,provider:"igdb",providerId:igdbId,
+      title:entry.title,subtitle:entry.subtitle,coverUrl:entry.coverUrl,
+      description:entry.description,createdAt:Date.now()};
     change(d=>({...d,games:[...d.games,game],memberships:modal?.categoryId && d.categories.some(c=>c.id===modal.categoryId)?
       [...d.memberships,{gameId:game.id,categoryId:modal.categoryId,
       order:d.memberships.filter(m=>m.categoryId===modal.categoryId).length}]:d.memberships}));
@@ -963,23 +996,47 @@ export default function GamingHQ() {
             {catalogResults.map(entry=><button className="catalog-result" key={entry.id} onClick={()=>importCatalogGame(entry)}>
               {entry.coverUrl?<img src={entry.coverUrl} alt="" loading="lazy"/>:<div className="catalog-cover-fallback"><Gamepad2/></div>}
               <span><strong>{entry.title}</strong><small>{entry.subtitle||"Unspecified platform"}</small></span>
-              {data.games.some(g=>g.catalogId===entry.id)?<span className="muted small">In library</span>:<Plus size={16}/>}
+              {data.games.some(g=>g.catalogId===entry.id || (g.provider==="igdb"&&g.providerId===Number(entry.id.replace(/^gamedb:/,""))))?<span className="muted small">In library</span>:<Plus size={16}/>}
             </button>)}
           </div>
           {!catalogBusy&&catalogQuery.trim().length>=2&&!catalogResults.length&&!catalogError&&<p className="muted small">No results. Try another spelling or add manually.</p>}
-          <button className="secondary" onClick={()=>openModal("game",undefined,modal.categoryId)}>
+          <button className="secondary" onClick={()=>{openModal("game",undefined,modal.categoryId);setAddGameMode("manual");}}>
             <Plus size={16}/> Add manually (custom game)
+          </button>
+          <button className="secondary" onClick={()=>openModal("game",undefined,modal.categoryId)}>
+            <Search size={16}/> Search live IGDB (optional credentials)
           </button>
           <p className="muted small">Metadata from LizardByte GameDB / IGDB. Covers are editable.</p>
         </div>}
-        {(modal.type==="game"||modal.type==="edit-game")&&<div className="dialog-fields"><p className="muted small">Create a custom game or edit imported metadata. Notes stay unchanged.</p>
-          <label>Game title<input autoFocus value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Kingdom Hearts Final Mix"/></label>
-          <label>Subtitle / details <span className="muted">(optional)</span><input value={subtitle} onChange={e=>setSubtitle(e.target.value)} placeholder="e.g. PlayStation 2 · Action RPG"/></label>
-          <label>Cover image URL <span className="muted">(optional)</span><input value={coverUrl} onChange={e=>setCoverUrl(e.target.value)} placeholder="https://…"/></label>
-          {modal.type==="game"&&<label>Game description <span className="muted">(optional)</span><textarea rows={4} value={descriptionDraft}
-            onChange={e=>setDescriptionDraft(e.target.value)} placeholder="A short description…"/></label>}
-          {modal.type==="game"&&<label>Add to a category <span className="muted">(optional)</span><select value={targetCategory} onChange={e=>setTargetCategory(e.target.value)}>
-            <option value="">Only add to Library</option>{data.categories.map(c=><option value={c.id} key={c.id}>{c.name}</option>)}</select></label>}</div>}
+        {modal.type==="game"&&<div className="add-game-tabs">
+          <button type="button" className={addGameMode==="search"?"active":""}
+            onClick={()=>setAddGameMode("search")}><Search size={16}/> Search IGDB</button>
+          <button type="button" className={addGameMode==="manual"?"active":""}
+            onClick={()=>setAddGameMode("manual")}><Pencil size={16}/> Manual entry</button>
+        </div>}
+        {modal.type==="game"&&<div className="add-game-category-picker">
+          <label htmlFor="add-game-category">Place in category</label>
+          <select id="add-game-category" value={targetCategory} onChange={e=>setTargetCategory(e.target.value)}>
+            <option value="">Only add to Library</option>
+            {data.categories.map(c=><option value={c.id} key={c.id}>{c.name}</option>)}
+          </select>
+        </div>}
+        {modal.type==="game"&&addGameMode==="search"&&<IGDBSearch
+          existingIds={data.games.filter(g=>g.provider==="igdb"&&typeof g.providerId==="number").map(g=>g.providerId!)}
+          onSelect={addIgdbGame}/>}
+        {(modal.type==="edit-game"||(modal.type==="game"&&addGameMode==="manual"))&&
+          <div className="dialog-fields">
+          {modal.type==="game"&&<p className="muted small">Create a custom entry with your own cover and description.</p>}
+          <label>Game title<input autoFocus value={name} onChange={e=>setName(e.target.value)}
+            placeholder="e.g. Kingdom Hearts Final Mix"/></label>
+          <label>Subtitle / details <span className="muted">(optional)</span>
+            <input value={subtitle} onChange={e=>setSubtitle(e.target.value)} placeholder="e.g. PlayStation 2 · Action RPG"/></label>
+          <label>Cover image URL <span className="muted">(optional)</span>
+            <input value={coverUrl} onChange={e=>setCoverUrl(e.target.value)} placeholder="https://…"/></label>
+          {modal.type==="game"&&<label>Game description <span className="muted">(optional)</span>
+            <textarea rows={4} value={descriptionDraft} onChange={e=>setDescriptionDraft(e.target.value)}
+              placeholder="A short description…"/></label>}
+        </div>}
         {modal.type==="category"&&<div className="dialog-fields"><label>Category name<input autoFocus value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Priority, Solo, Multiplayer"/></label>
           <label>Location<select value={targetCategory} onChange={e=>setTargetCategory(e.target.value)}><option value="">Dashboard</option>{data.shelves.map(s=><option key={s.id} value={s.id}>Shelf: {s.name}</option>)}</select></label>
           <label>Accent color</label><div className="swatches">{colors.map(c=><button className={"swatch "+(categoryColor===c?"chosen":"")} style={{background:c}} key={c}
@@ -1027,7 +1084,7 @@ export default function GamingHQ() {
         {error&&<p role="alert" className="field-error">{error}</p>}
         <div className="dialog-footer"><button className="secondary" onClick={()=>setModal(null)}>
           {modal.type==="organize"||modal.type==="pick-library"||modal.type==="catalog"?"Done":"Cancel"}</button>
-          {modal.type!=="organize"&&modal.type!=="pick-library"&&modal.type!=="catalog"&&<button className="primary" onClick={modal.type==="game"?addGame:modal.type==="edit-game"?saveEditedGame:
+          {modal.type!=="organize"&&modal.type!=="pick-library"&&modal.type!=="catalog"&&(modal.type!=="game"||addGameMode==="manual")&&<button className="primary" onClick={modal.type==="game"?addGame:modal.type==="edit-game"?saveEditedGame:
             modal.type==="category"?addCategory:modal.type==="shelf"?addShelf:
             modal.type==="edit-link"?saveEditedLink:addLink}>
             <Plus size={16}/>{modal.type==="game"?"Add game":modal.type==="edit-game"?"Save game":

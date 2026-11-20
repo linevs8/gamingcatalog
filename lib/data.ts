@@ -3,6 +3,9 @@ export type Game = {
   title: string;
   subtitle: string;
   coverUrl: string;
+  /** Authenticated IGDB metadata source, retained for existing imports. */
+  provider?: "igdb";
+  providerId?: number;
   /** Stable external identifier, independent of this library entry. */
   catalogId?: string;
   /** Source-provided description; editing it never touches the game notebook. */
@@ -157,6 +160,8 @@ export function validateImport(raw: unknown): Data {
   for(const g of d.games) {
     if (!g || typeof g.id !== "string" || typeof g.title !== "string" ||
         typeof g.coverUrl !== "string" || typeof g.subtitle !== "string" ||
+        (g.provider !== undefined && g.provider !== "igdb") ||
+        (g.providerId !== undefined && (!Number.isInteger(g.providerId) || g.providerId < 0)) ||
         (g.catalogId !== undefined && typeof g.catalogId !== "string") ||
         (g.description !== undefined && (typeof g.description !== "string" || g.description.length > 2_000_000)))
       throw new Error("Invalid game record in backup.");
