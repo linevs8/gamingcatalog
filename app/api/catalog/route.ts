@@ -29,7 +29,7 @@ async function databaseJson<T>(path: string): Promise<T> {
   throw new Error("The external game catalog is temporarily unavailable.");
 }
 
-export function normalizeTitle(title: string): string {
+function normalizeTitle(title: string): string {
   return title.normalize("NFKD").replace(/[\u0300-\u036f]/g, "")
     .toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
