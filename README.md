@@ -16,9 +16,18 @@ Instead of a forced backlog or "daily rotation" system, **you** create the categ
 - **Guest saving & customization:** Browser-local autosave, Midnight Blue plus three optional themes, plus **JSON export/import** to move your data between browser origins.
 - **Navigation:** Narrow collapsible sidebar, browser Back/Forward, real links and shareable route structure.
 
+## November 20, 2026 catch-up branch
+
+- Search the cross-platform LizardByte GameDB catalog (cover art and metadata, including Pokémon and Tekken), with manual fallback. The external index is a snapshot and may have missing entries.
+- Edit a separate, rich-text game description without changing the personal game notebook.
+- Collapse the Game Library, select several games and bulk add/remove category memberships.
+- Reorder and duplicate note pages, and restore pages from Recently deleted (limited to 30 per game).
+- Existing category/game drag-and-drop and Undo are retained.
+- These features are on a review branch, not yet merged or deployed. The third-party catalog and images are subject to their respective terms and availability.
+
 ## What is still planned
 
-- External automatic game search and cover metadata (requires approved API credentials/licensing).
+- Production-hardened game metadata providers and alternate cover picker (API licensing, caching and source attribution must be reviewed).
 - Optional account sign-in, secure cloud synchronization, and multi-device data.
 - Further performance/accessibility/mobile QA, advanced bulk actions, enhanced note recovery and polish.
 
