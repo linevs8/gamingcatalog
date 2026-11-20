@@ -4,6 +4,9 @@ export type Game = {
   subtitle: string;
   coverUrl: string;
   createdAt: number;
+  /** Provider identity is separate from the user-owned game ID. */
+  provider?: "igdb";
+  providerId?: number;
 };
 export type Category = {
   id: string;

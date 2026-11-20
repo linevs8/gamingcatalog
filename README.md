@@ -9,7 +9,7 @@ Instead of a forced backlog or "daily rotation" system, **you** create the categ
 ## What's usable in this milestone
 
 - **Dashboard:** Empty start, fully custom categories, whole-card navigation and four top-ranked game-cover previews.
-- **Library:** Add games manually, browse Gallery/List, search your collection, edit title/details/cover, and assign games to any number of categories. Games stay unique; notes are shared across categories.
+- **Library:** Search **IGDB** to add titles, artwork and basic release/platform metadata when credentials are configured; or create manual entries. Browse Gallery/List, search your saved collection, edit details/cover, and assign games to multiple categories. Existing imported IGDB entries are reused rather than duplicated.
 - **Categories & Shelves:** No deep nesting; custom colors and icons, independent Gallery/List views, rename, reorganization, shelves, and safe shelf deletion that moves categories back to Dashboard without deleting games.
 - **Drag & drop:** Hold briefly to move/reorder games and categories, drop onto sidebar destinations or named Shelves, with an **Undo** action. Sidebar arrows remain as an alternative.
 - **Game workspaces:** A **rich-text notebook** (bold, italics, headings, underline, link, color, bullets, numbering, checklists), a per-game renameable Current heading, optional extra note pages, checkpoint/restore history, and editable Quick Links.
@@ -18,7 +18,7 @@ Instead of a forced backlog or "daily rotation" system, **you** create the categ
 
 ## What is still planned
 
-- External automatic game search and cover metadata (requires approved API credentials/licensing).
+- Live IGDB search requires Twitch app credentials and compliance with IGDB's data/artwork terms. The UI and secure route are implemented, but until credentials are set, only manual creation works.
 - Optional account sign-in, secure cloud synchronization, and multi-device data.
 - Further performance/accessibility/mobile QA, advanced bulk actions, enhanced note recovery and polish.
 
@@ -27,6 +27,19 @@ Instead of a forced backlog or "daily rotation" system, **you** create the categ
 ## Validation
 
 The GitHub Actions workflow runs TypeScript checking, pure organization invariants, and a Next.js production build. Automated CI passing does not substitute for clicking through real browsers and touch devices.
+
+## Enable live IGDB game search
+
+The interface, server-side Twitch token exchange, image URLs, rate limiting, and duplicate protection are in this milestone. **No credentials are committed to GitHub.** IGDB's free API is intended for noncommercial use; review its licensing and attribution requirements before opening the site to broader use.
+
+1. Create a **Confidential** application at [Twitch Developer Console](https://dev.twitch.tv/console), with Twitch two-factor authentication enabled. The redirect URL is not used for this app; IGDB suggests `http://localhost` during setup.
+2. Copy `.env.example` to `.env.local` for local development. Put your app's **Client ID** in `IGDB_CLIENT_ID` and its **Client Secret** in `IGDB_CLIENT_SECRET`. Never prefix these with `NEXT_PUBLIC_`.
+3. In **Vercel → gamingcatalog → Settings → Environment Variables**, create `IGDB_CLIENT_ID` and `IGDB_CLIENT_SECRET` for **Preview**, and Production later if appropriate. Save and redeploy after configuring. Existing deployments do not automatically inherit newly added variables.
+4. Search for a game with **Add Game → Search IGDB**, or switch to **Manual entry** at any time.
+
+The browser only contacts `/api/igdb/search`. Tokens and secrets stay on the Next.js server. The backend uses a short search-result cache and honors IGDB's 4 requests/sec limit using a lightweight per-instance guard. For broader public usage, add a shared rate limiter/abuse protection before launch.
+
+Docs: [Official IGDB API](https://api-docs.igdb.com/). Game data and covers are attributed to IGDB in the search interface.
 
 ## Run locally
 
