@@ -18,14 +18,15 @@ import {
   GripVertical, LayoutDashboard, Library, Link2, List, Menu, MoreHorizontal,
   Plus, Search, Settings2, Sparkles, Star, Trash2, X, PanelLeftClose, Pencil,
   Swords, Trophy, Heart, Users, Flame, Target, Bookmark, MonitorPlay,
-  Crown, Clock3, Compass, Puzzle, Zap, CalendarDays, FolderOpen, Shield, Coffee
+  Crown, Clock3, Compass, Puzzle, Zap, CalendarDays, FolderOpen, Shield, Coffee, RotateCcw
 } from "lucide-react";
 import {
   type Category, type Data, type Game, type QuickLink, emptyData,
   loadData, makeId, notePreview, saveData, validCover, validateImport, type ThemeName
 } from "@/lib/data";
 
-type Modal = null | { type: "game" | "category" | "shelf" | "link" | "organize" | "pick-library" | "edit-game" | "edit-link"; gameId?: string; categoryId?: string; linkId?: string };
+type Modal = null | { type: "catalog" | "game" | "category" | "shelf" | "link" | "organize" | "pick-library" | "edit-game" | "edit-link"; gameId?: string; categoryId?: string; linkId?: string };
+type CatalogGame = { id: string; title: string; coverUrl: string; subtitle: string; description: string; source: string; platforms: string[]; year?: number };
 const colors = ["#77A9F7", "#B39BFA", "#70C8BE", "#E8B878", "#F29BAD", "#96B6D1"];
 const icons = [
   "star", "gamepad", "book", "sparkle", "swords", "trophy",
@@ -76,6 +77,14 @@ export default function GamingHQ() {
   const [name, setName] = useState("");
   const [subtitle, setSubtitle] = useState("");
   const [coverUrl, setCoverUrl] = useState("");
+  const [descriptionDraft, setDescriptionDraft] = useState("");
+  const [catalogQuery, setCatalogQuery] = useState("");
+  const [catalogResults, setCatalogResults] = useState<CatalogGame[]>([]);
+  const [catalogBusy, setCatalogBusy] = useState(false);
+  const [catalogError, setCatalogError] = useState("");
+  const [libraryCollapsed, setLibraryCollapsed] = useState(false);
+  const [librarySelected, setLibrarySelected] = useState<string[]>([]);
+  const [showDeletedNotes,setShowDeletedNotes]=useState(false);
   const [targetCategory, setTargetCategory] = useState("");
   const [categoryColor, setCategoryColor] = useState(colors[0]);
   const [categoryIcon, setCategoryIcon] = useState(icons[0]);
@@ -97,6 +106,29 @@ export default function GamingHQ() {
   const backupInputRef = useRef<HTMLInputElement>(null);
   const [showPreferences,setShowPreferences] = useState(false);
   const [backupMessage,setBackupMessage] = useState("");
+  useEffect(() => {
+    if (modal?.type !== "catalog" || catalogQuery.trim().length < 2) {
+      setCatalogResults([]);
+      setCatalogBusy(false);
+      return;
+    }
+    const controller = new AbortController();
+    const timeout = window.setTimeout(async () => {
+      setCatalogBusy(true);
+      setCatalogError("");
+      try {
+        const response = await fetch("/api/catalog?q=" + encodeURIComponent(catalogQuery.trim()), {signal: controller.signal});
+        const json = await response.json();
+        if (!response.ok) throw new Error(json.error || "Catalog unavailable");
+        setCatalogResults(json.results || []);
+      } catch (error) {
+        if (!controller.signal.aborted) setCatalogError(error instanceof Error ? error.message : "Search failed");
+      } finally {
+        if (!controller.signal.aborted) setCatalogBusy(false);
+      }
+    }, 300);
+    return () => { window.clearTimeout(timeout); controller.abort(); };
+  }, [modal?.type, catalogQuery]);
   const sensors=useSensors(
     useSensor(PointerSensor,{activationConstraint:{delay:240,tolerance:6}}),
     useSensor(KeyboardSensor,{coordinateGetter:sortableKeyboardCoordinates})
@@ -180,6 +212,8 @@ export default function GamingHQ() {
     setName(type==="edit-game" ? existingGame?.title||"" : "");
     setSubtitle(type==="edit-game" ? existingGame?.subtitle||"" : "");
     setCoverUrl(type==="edit-game" ? existingGame?.coverUrl||"" : "");
+    setDescriptionDraft(type==="edit-game" ? existingGame?.description||"" : "");
+    if (type==="catalog") { setCatalogQuery(""); setCatalogResults([]); setCatalogError(""); }
     setLinkUrl(type==="edit-link" ? existingLink?.url||"" : "");
     setLinkName(type==="edit-link" ? existingLink?.title||"" : "");
     setTargetCategory(type === "game" ? categoryId || "" : "");
@@ -194,7 +228,7 @@ export default function GamingHQ() {
     if(!name.trim()){setError("Enter a game title.");return;}
     if(!validCover(coverUrl.trim())){setError("Cover must be a valid http(s) URL.");return;}
     change(d=>({...d,games:d.games.map(g=>g.id===modal.gameId?
-      {...g,title:name.trim(),subtitle:subtitle.trim(),coverUrl:coverUrl.trim()}:g)}));
+      {...g,title:name.trim(),subtitle:subtitle.trim(),coverUrl:coverUrl.trim(),description:descriptionDraft}:g)}));
     setModal(null);
   };
   const addIgdbGame = (item: IgdbGame) => {
@@ -209,7 +243,8 @@ export default function GamingHQ() {
     const id=makeId();
     const game:Game = {
       id, title:item.title, subtitle:item.subtitle, coverUrl:item.coverUrl,
-      createdAt:Date.now(), provider:"igdb", providerId:item.providerId
+      createdAt:Date.now(), provider:"igdb", providerId:item.providerId,
+      catalogId:"gamedb:"+item.providerId
     };
     change(d=>({
       ...d, games:[...d.games,game],
@@ -223,7 +258,7 @@ export default function GamingHQ() {
     const title = name.trim();
     if (!title) { setError("Enter a game title."); return; }
     if (!validCover(coverUrl.trim())) { setError("Cover must be a valid http(s) URL."); return; }
-    const game: Game = { id: makeId(), title, subtitle: subtitle.trim(), coverUrl: coverUrl.trim(), createdAt: Date.now() };
+    const game: Game = { id: makeId(), title, subtitle: subtitle.trim(), coverUrl: coverUrl.trim(), description:descriptionDraft, createdAt: Date.now() };
     change(d => ({
       ...d, games: [...d.games, game],
       memberships: targetCategory ? [...d.memberships, {
@@ -232,6 +267,37 @@ export default function GamingHQ() {
       }] : d.memberships
     }));
     setModal(null);
+  };
+  const importCatalogGame = (entry: CatalogGame) => {
+    const igdbId=Number(entry.id.replace(/^gamedb:/,""));
+    const existing = data.games.find(g=>g.catalogId===entry.id || (g.provider==="igdb"&&g.providerId===igdbId));
+    if (existing) {
+      if (modal?.categoryId) toggleMembership(existing.id,modal.categoryId,true);
+      setModal(null); go("/game/"+existing.id); return;
+    }
+    const game: Game = {id:makeId(),catalogId:entry.id,provider:"igdb",providerId:igdbId,
+      title:entry.title,subtitle:entry.subtitle,coverUrl:entry.coverUrl,
+      description:entry.description,createdAt:Date.now()};
+    change(d=>({...d,games:[...d.games,game],memberships:modal?.categoryId && d.categories.some(c=>c.id===modal.categoryId)?
+      [...d.memberships,{gameId:game.id,categoryId:modal.categoryId,
+      order:d.memberships.filter(m=>m.categoryId===modal.categoryId).length}]:d.memberships}));
+    setModal(null);
+    go("/game/"+game.id);
+  };
+  const bulkAssign=(categoryId:string,add:boolean)=>{
+    const selected=new Set(librarySelected);
+    change(d=>{
+      const keep=d.memberships.filter(m=>!(m.categoryId===categoryId && selected.has(m.gameId) && !add));
+      let members=keep;
+      if(add){
+        const present=new Set(keep.filter(m=>m.categoryId===categoryId).map(m=>m.gameId));
+        members=[...keep,...librarySelected.filter(id=>!present.has(id)).map((gameId,i)=>({
+          gameId,categoryId,order:keep.filter(m=>m.categoryId===categoryId).length+i
+        }))];
+      }
+      return {...d,memberships:members};
+    });
+    setLibrarySelected([]);
   };
   const addCategory = () => {
     if (!name.trim()) { setError("Name your category."); return; }
@@ -365,10 +431,42 @@ export default function GamingHQ() {
     }}));
     setNoteSelection(p=>({...p,[gameId]:id}));
   };
-  const deleteNotePage = (gameId: string,pageId: string) => {
-    if (!window.confirm("Delete this notes page and its contents? The main notes page won't be affected.")) return;
-    change(d=>({...d,notePages:{...(d.notePages||{}),[gameId]:(d.notePages?.[gameId]||[]).filter(p=>p.id!==pageId)}}));
+  const deleteNotePage=(gameId:string,pageId:string)=>{
+    if(!window.confirm("Move this page to Recently deleted?"))return;
+    change(d=>{
+      const page=(d.notePages?.[gameId]||[]).find(p=>p.id===pageId);
+      if(!page)return d;
+      return {...d,notePages:{...(d.notePages||{}),[gameId]:(d.notePages?.[gameId]||[]).filter(p=>p.id!==pageId)},
+        deletedNotePages:{...(d.deletedNotePages||{}),
+          [gameId]:[{...page,deletedAt:Date.now()},...(d.deletedNotePages?.[gameId]||[])].slice(0,30)}};
+    });
     setNoteSelection(p=>({...p,[gameId]:"current"}));
+  };
+  const restoreDeletedNote=(gameId:string,pageId:string)=>{
+    change(d=>{
+      const page=(d.deletedNotePages?.[gameId]||[]).find(p=>p.id===pageId);
+      if(!page)return d;
+      const restored={id:page.id,title:page.title,content:page.content,order:(d.notePages?.[gameId]||[]).length};
+      return {...d,notePages:{...(d.notePages||{}),[gameId]:[...(d.notePages?.[gameId]||[]),restored]},
+        deletedNotePages:{...(d.deletedNotePages||{}),[gameId]:(d.deletedNotePages?.[gameId]||[]).filter(p=>p.id!==pageId)}};
+    });
+    setNoteSelection(p=>({...p,[gameId]:pageId}));
+  };
+  const moveNotePage=(gameId:string,pageId:string,delta:number)=>{
+    change(d=>{
+      const pages=[...(d.notePages?.[gameId]||[])].sort((a,b)=>a.order-b.order);
+      const index=pages.findIndex(p=>p.id===pageId),target=index+delta;
+      if(index<0||target<0||target>=pages.length)return d;
+      [pages[index],pages[target]]=[pages[target],pages[index]];
+      return {...d,notePages:{...(d.notePages||{}),[gameId]:pages.map((p,i)=>({...p,order:i}))}};
+    });
+  };
+  const duplicateNotePage=(gameId:string,pageId:string)=>{
+    change(d=>{
+      const pages=d.notePages?.[gameId]||[],original=pages.find(p=>p.id===pageId);
+      if(!original)return d;
+      return {...d,notePages:{...(d.notePages||{}),[gameId]:[...pages,{...original,id:makeId(),title:original.title+" (copy)",order:pages.length}]}};
+    });
   };
   const renameNotePage = (gameId:string,pageId:string,currentName:string) => {
     const name=window.prompt("Rename notes page:",currentName)?.trim().slice(0,80);
@@ -441,10 +539,11 @@ export default function GamingHQ() {
       const notes={...d.notes}; delete notes[id];
       const noteTitles={...(d.noteTitles||{})}; delete noteTitles[id];
       const notePages={...(d.notePages||{})}; delete notePages[id];
+      const deletedNotePages={...(d.deletedNotePages||{})}; delete deletedNotePages[id];
       const noteRevisions={...(d.noteRevisions||{})};
       for(const key of Object.keys(noteRevisions)) if(key.startsWith(id+"/"))delete noteRevisions[key];
       return {...d, noteRevisions, games:d.games.filter(g=>g.id!==id), memberships:d.memberships.filter(m=>m.gameId!==id),
-        links:d.links.filter(l=>l.gameId!==id), notes, noteTitles,notePages};
+        links:d.links.filter(l=>l.gameId!==id), notes, noteTitles,notePages,deletedNotePages};
     });
     setModal(null);
     go("/library");
@@ -544,19 +643,37 @@ export default function GamingHQ() {
     return <div className="screen">
       <div className="page-top"><div><div className="eyebrow">THE MASTER COLLECTION</div><h1>All Games<span className="dot">.</span></h1>
         <p className="subline">Every game lives here, even when it appears in several categories.</p></div>
-        <button className="primary" onClick={()=>openModal("game")}><Plus size={17}/> Add Game</button></div>
+        <button className="primary" onClick={()=>openModal("catalog")}><Plus size={17}/> Import games</button></div>
       <div className="library-toolbar">
         <label className="search"><Search size={18}/><input aria-label="Search your games" placeholder="Search your library…" value={query} onChange={e=>setQuery(e.target.value)}/></label>
         <div className="segment"><button className={libraryView==="gallery"?"selected":""} onClick={()=>setLibraryView("gallery")} title="Gallery view"><LayoutDashboard size={17}/></button>
           <button className={libraryView==="list"?"selected":""} onClick={()=>setLibraryView("list")} title="List view"><List size={17}/></button></div>
       </div>
+      <div className="library-extra-actions">
+        <button className="secondary small-button" onClick={()=>setLibraryCollapsed(v=>!v)} aria-expanded={!libraryCollapsed}>
+          {libraryCollapsed?<ChevronRight size={15}/>:<ChevronDown size={15}/>}
+          {libraryCollapsed?"Show":"Hide"} game library ({filtered.length})
+        </button>
+        {!!librarySelected.length&&<div className="bulk-controls">
+          <span>{librarySelected.length} selected</span>
+          <select aria-label="Bulk category" value={targetCategory} onChange={e=>setTargetCategory(e.target.value)}>
+            <option value="">Choose category</option>{data.categories.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          <button className="secondary small-button" disabled={!targetCategory} onClick={()=>bulkAssign(targetCategory,true)}>Add to category</button>
+          <button className="secondary small-button" disabled={!targetCategory} onClick={()=>bulkAssign(targetCategory,false)}>Remove from category</button>
+          <button className="secondary small-button" onClick={()=>setLibrarySelected([])}>Clear selection</button>
+        </div>}
+      </div>
       {!data.games.length?<div className="blank-state compact"><div className="blank-symbol"><Library size={30}/></div>
-        <h2>Your library starts here.</h2><p>Add a game manually now. Game database search is coming in the next milestone.</p>
-        <button className="primary" onClick={()=>openModal("game")}><Plus size={17}/> Add a game</button>
-      </div>:!filtered.length?<div className="empty-search">No games match “{query}”.</div>:
+        <h2>Your library starts here.</h2><p>Import console, PC and browser games with cover art, or add your own.</p>
+        <button className="primary" onClick={()=>openModal("catalog")}><Plus size={17}/> Import games</button>
+      </div>:libraryCollapsed?<p className="muted small">Library hidden. Expand to browse your games.</p>:!filtered.length?<div className="empty-search">No games match “{query}”.</div>:
       <div className={libraryView==="gallery"?"games-grid":"games-list"}>
         {filtered.map(g=><DragItem key={g.id} id={"library-game/"+g.id} data={{kind:"game",categoryId:"library",gameId:g.id}}>
-          {GameCard({game:g,list:libraryView==="list",organize:true})}
+          <div className="selectable-game"><label className="game-select" title={"Select "+g.title}>
+            <input type="checkbox" aria-label={"Select "+g.title} checked={librarySelected.includes(g.id)}
+              onChange={e=>setLibrarySelected(prev=>e.target.checked?[...prev,g.id]:prev.filter(id=>id!==g.id))}/>
+          </label>{GameCard({game:g,list:libraryView==="list",organize:true})}</div>
         </DragItem>)}
       </div>}
     </div>;
@@ -596,7 +713,7 @@ export default function GamingHQ() {
           <button className="secondary" onClick={()=>openModal("pick-library",undefined,category.id)}>
             <Library size={16}/> From Library
           </button>
-          <button className="primary" onClick={()=>openModal("game",undefined,category.id)}>
+          <button className="primary" onClick={()=>openModal("catalog",undefined,category.id)}>
             <Plus size={16}/> New game
           </button>
           <div className="segment"><button className={category.view==="gallery"?"selected":""} onClick={()=>setCategory(category.id,{view:"gallery"})} aria-label="Gallery view"><LayoutDashboard size={17}/></button>
@@ -615,7 +732,7 @@ export default function GamingHQ() {
       {!games.length?<div className="blank-state compact"><div className="blank-symbol"><Gamepad2 size={30}/></div><h2>Nothing here yet.</h2>
         <p>Create a new game right here, or choose one you've already added to your Library.</p>
         <div className="empty-category-actions">
-          <button className="primary" onClick={()=>openModal("game",undefined,category.id)}>
+          <button className="primary" onClick={()=>openModal("catalog",undefined,category.id)}>
             <Plus size={17}/> Create a game
           </button>
           <button className="secondary" onClick={()=>openModal("pick-library",undefined,category.id)}>
@@ -649,12 +766,19 @@ export default function GamingHQ() {
         <div className="chips">{gameCategories.map(c=><Link key={c.id} href={"/category/"+c.id} className="chip">{c.name}</Link>)}
           {!gameCategories.length&&<span className="muted small">Only in Library</span>}</div>
       </div><button className="secondary icon-square" title="Organize game" aria-label="Organize game" onClick={()=>openModal("organize",game.id)}><MoreHorizontal size={20}/></button></div>
+      <section className="workspace-section description-section">
+        <div className="section-head"><div><div className="section-overline">ABOUT THIS GAME</div><h2>Description</h2></div>
+          <button className="secondary small-button" onClick={()=>openModal("edit-game",game.id)}><Pencil size={15}/> Edit details</button>
+        </div>
+        <RichNotes key={"description/"+game.id} note={game.description||""}
+          onChange={html=>change(d=>({...d,games:d.games.map(g=>g.id===game.id?{...g,description:html}:g)}))}/>
+      </section>
       <section className="workspace-section note-section">
         <div className="note-page-tabs" role="tablist" aria-label="Notes pages">
           <button type="button" role="tab" aria-selected={!noteSelection[game.id]||noteSelection[game.id]==="current"}
             className={!noteSelection[game.id]||noteSelection[game.id]==="current"?"selected":""}
             onClick={()=>setNoteSelection(p=>({...p,[game.id]:"current"}))}>Current</button>
-          {(data.notePages?.[game.id]||[]).sort((a,b)=>a.order-b.order).map(page=>
+          {[...(data.notePages?.[game.id]||[])].sort((a,b)=>a.order-b.order).map(page=>
             <button key={page.id} role="tab" aria-selected={noteSelection[game.id]===page.id}
               className={noteSelection[game.id]===page.id?"selected":""}
               onClick={()=>setNoteSelection(p=>({...p,[game.id]:page.id}))}>{page.title}</button>
@@ -695,6 +819,9 @@ export default function GamingHQ() {
                     const p=data.notePages?.[game.id]?.find(p=>p.id===noteSelection[game.id]);
                     if(p)renameNotePage(game.id,p.id,p.title);
                   }}><Pencil size={15}/></button>
+                <button className="note-title-control" title="Move page left" aria-label="Move page left" onClick={()=>moveNotePage(game.id,noteSelection[game.id],-1)}><ArrowLeft size={15}/></button>
+                <button className="note-title-control" title="Move page right" aria-label="Move page right" onClick={()=>moveNotePage(game.id,noteSelection[game.id],1)}><ArrowRight size={15}/></button>
+                <button className="note-title-control" title="Duplicate page" aria-label="Duplicate page" onClick={()=>duplicateNotePage(game.id,noteSelection[game.id])}><BookOpen size={15}/></button>
                 <button className="note-title-control" aria-label="Delete notes page"
                   onClick={()=>deleteNotePage(game.id,noteSelection[game.id])}><Trash2 size={15}/></button>
               </div>
@@ -712,6 +839,9 @@ export default function GamingHQ() {
               [game.id]:(d.notePages?.[game.id]||[]).map(p=>p.id===noteSelection[game.id]?{...p,content:html}:p)}}))}/>
         }
         <div className="note-history-bar">
+          <button className="history-action" type="button" onClick={()=>setShowDeletedNotes(v=>!v)}>
+            <RotateCcw size={14}/> Recently deleted ({(data.deletedNotePages?.[game.id]||[]).length})
+          </button>
           <button className="history-action" type="button" onClick={()=>snapshotNote(game.id,pageId)}>
             <BookOpen size={14}/> Save checkpoint
           </button>
@@ -720,6 +850,12 @@ export default function GamingHQ() {
             <Clock3 size={14}/> History ({history.length})
           </button>
         </div>
+        {showDeletedNotes&&<div className="note-history-list">
+          {(data.deletedNotePages?.[game.id]||[]).length?
+            (data.deletedNotePages?.[game.id]||[]).map(page=><div className="note-history-row" key={page.id}>
+              <span>{page.title}</span><button className="secondary small-button" onClick={()=>restoreDeletedNote(game.id,page.id)}>Restore</button>
+            </div>):<p className="muted small">No recently deleted pages.</p>}
+        </div>}
         {showHistory[historyKey]&&<div className="note-history-list">
           {history.length?history.map(rev=><div key={rev.id} className="note-history-row">
             <span>{new Date(rev.createdAt).toLocaleString()}</span>
@@ -847,17 +983,38 @@ export default function GamingHQ() {
     </div>}
     {modal&&<div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setModal(null)}}>
       <div className="dialog" role="dialog" aria-modal="true" aria-label={modal.type==="organize"?"Organize game":"Add new item"}>
-        <div className="dialog-head"><h2>{modal.type==="game"?"Add a game":modal.type==="edit-game"?"Edit game":
+        <div className="dialog-head"><h2>{modal.type==="catalog"?"Import games":modal.type==="game"?"Add a game":modal.type==="edit-game"?"Edit game":
           modal.type==="category"?"New category":modal.type==="shelf"?"New shelf":
           modal.type==="link"?"Add quick link":modal.type==="edit-link"?"Edit quick link":
           modal.type==="pick-library"?"Add from Library":"Organize game"}</h2><button className="icon-button" title="Close" onClick={()=>setModal(null)}><X size={20}/></button></div>
+        {modal.type==="catalog"&&<div className="dialog-fields">
+          <label>Search cross-platform games<input autoFocus value={catalogQuery} onChange={e=>setCatalogQuery(e.target.value)}
+            placeholder="Pokémon, Tekken Tag 2, Pokémon Showdown…"/></label>
+          {catalogBusy&&<p role="status" className="muted small">Searching game catalog…</p>}
+          {catalogError&&<p role="alert" className="field-error">{catalogError}</p>}
+          <div className="catalog-results">
+            {catalogResults.map(entry=><button className="catalog-result" key={entry.id} onClick={()=>importCatalogGame(entry)}>
+              {entry.coverUrl?<img src={entry.coverUrl} alt="" loading="lazy"/>:<div className="catalog-cover-fallback"><Gamepad2/></div>}
+              <span><strong>{entry.title}</strong><small>{entry.subtitle||"Unspecified platform"}</small></span>
+              {data.games.some(g=>g.catalogId===entry.id || (g.provider==="igdb"&&g.providerId===Number(entry.id.replace(/^gamedb:/,""))))?<span className="muted small">In library</span>:<Plus size={16}/>}
+            </button>)}
+          </div>
+          {!catalogBusy&&catalogQuery.trim().length>=2&&!catalogResults.length&&!catalogError&&<p className="muted small">No results. Try another spelling or add manually.</p>}
+          <button className="secondary" onClick={()=>{openModal("game",undefined,modal.categoryId);setAddGameMode("manual");}}>
+            <Plus size={16}/> Add manually (custom game)
+          </button>
+          <button className="secondary" onClick={()=>openModal("game",undefined,modal.categoryId)}>
+            <Search size={16}/> Search live IGDB (optional credentials)
+          </button>
+          <p className="muted small">Metadata from LizardByte GameDB / IGDB. Covers are editable.</p>
+        </div>}
         {modal.type==="game"&&<div className="add-game-tabs">
           <button type="button" className={addGameMode==="search"?"active":""}
             onClick={()=>setAddGameMode("search")}><Search size={16}/> Search IGDB</button>
           <button type="button" className={addGameMode==="manual"?"active":""}
             onClick={()=>setAddGameMode("manual")}><Pencil size={16}/> Manual entry</button>
         </div>}
-        {(modal.type==="game")&&<div className="add-game-category-picker">
+        {modal.type==="game"&&<div className="add-game-category-picker">
           <label htmlFor="add-game-category">Place in category</label>
           <select id="add-game-category" value={targetCategory} onChange={e=>setTargetCategory(e.target.value)}>
             <option value="">Only add to Library</option>
@@ -869,14 +1026,17 @@ export default function GamingHQ() {
           onSelect={addIgdbGame}/>}
         {(modal.type==="edit-game"||(modal.type==="game"&&addGameMode==="manual"))&&
           <div className="dialog-fields">
-          {modal.type==="game"&&<p className="muted small">Create a custom entry even if it isn't on IGDB.</p>}
+          {modal.type==="game"&&<p className="muted small">Create a custom entry with your own cover and description.</p>}
           <label>Game title<input autoFocus value={name} onChange={e=>setName(e.target.value)}
             placeholder="e.g. Kingdom Hearts Final Mix"/></label>
           <label>Subtitle / details <span className="muted">(optional)</span>
             <input value={subtitle} onChange={e=>setSubtitle(e.target.value)} placeholder="e.g. PlayStation 2 · Action RPG"/></label>
           <label>Cover image URL <span className="muted">(optional)</span>
             <input value={coverUrl} onChange={e=>setCoverUrl(e.target.value)} placeholder="https://…"/></label>
-          </div>}
+          {modal.type==="game"&&<label>Game description <span className="muted">(optional)</span>
+            <textarea rows={4} value={descriptionDraft} onChange={e=>setDescriptionDraft(e.target.value)}
+              placeholder="A short description…"/></label>}
+        </div>}
         {modal.type==="category"&&<div className="dialog-fields"><label>Category name<input autoFocus value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Priority, Solo, Multiplayer"/></label>
           <label>Location<select value={targetCategory} onChange={e=>setTargetCategory(e.target.value)}><option value="">Dashboard</option>{data.shelves.map(s=><option key={s.id} value={s.id}>Shelf: {s.name}</option>)}</select></label>
           <label>Accent color</label><div className="swatches">{colors.map(c=><button className={"swatch "+(categoryColor===c?"chosen":"")} style={{background:c}} key={c}
@@ -923,8 +1083,8 @@ export default function GamingHQ() {
         </div>}
         {error&&<p role="alert" className="field-error">{error}</p>}
         <div className="dialog-footer"><button className="secondary" onClick={()=>setModal(null)}>
-          {modal.type==="organize"||modal.type==="pick-library"?"Done":"Cancel"}</button>
-          {modal.type!=="organize"&&modal.type!=="pick-library"&&(modal.type!=="game"||addGameMode==="manual")&&<button className="primary" onClick={modal.type==="game"?addGame:modal.type==="edit-game"?saveEditedGame:
+          {modal.type==="organize"||modal.type==="pick-library"||modal.type==="catalog"?"Done":"Cancel"}</button>
+          {modal.type!=="organize"&&modal.type!=="pick-library"&&modal.type!=="catalog"&&(modal.type!=="game"||addGameMode==="manual")&&<button className="primary" onClick={modal.type==="game"?addGame:modal.type==="edit-game"?saveEditedGame:
             modal.type==="category"?addCategory:modal.type==="shelf"?addShelf:
             modal.type==="edit-link"?saveEditedLink:addLink}>
             <Plus size={16}/>{modal.type==="game"?"Add game":modal.type==="edit-game"?"Save game":

@@ -390,3 +390,23 @@ h2 { margin: 0; }
   .igdb-result { gap:7px; }
   .igdb-result-cover { flex-basis:40px; height:53px; }
 }
+
+/* Game catalog importer and bulk library controls */
+.library-extra-actions { display:flex; align-items:center; flex-wrap:wrap; gap:12px; margin:-8px 0 20px; }
+.bulk-controls { display:flex; align-items:center; flex-wrap:wrap; gap:8px; color:var(--muted); font-size:12px; }
+.bulk-controls select { color:var(--text); background:var(--panel); border:1px solid var(--border); padding:8px; border-radius:8px; max-width:180px; }
+.selectable-game { position:relative; }
+.selectable-game .game-select { position:absolute; z-index:3; top:8px; left:8px; display:grid; place-items:center; width:25px; height:25px; border-radius:7px; background:#0e1b2ddd; border:1px solid #567397; }
+.selectable-game .game-select input { width:16px; height:16px; accent-color:var(--accent); }
+.catalog-results { display:flex; flex-direction:column; gap:7px; max-height:350px; overflow-y:auto; }
+.catalog-result { width:100%; text-align:left; background:var(--panel-2); color:var(--text); border:1px solid var(--border); border-radius:9px; display:flex; align-items:center; gap:12px; padding:8px; }
+.catalog-result:hover,.catalog-result:focus-visible { border-color:var(--accent); background:#274062; }
+.catalog-result img,.catalog-cover-fallback { flex:0 0 auto; width:42px; height:56px; object-fit:cover; background:#0e1b2d; border-radius:5px; }
+.catalog-cover-fallback { display:grid; place-items:center; color:var(--muted); }
+.catalog-result > span:nth-child(2) { display:flex; flex-direction:column; min-width:0; flex:1; gap:4px; }
+.catalog-result strong { font-size:13px; overflow-wrap:anywhere; }
+.catalog-result small { font-size:11px; color:var(--muted); }
+.catalog-result > svg { color:var(--accent); }
+.dialog textarea { width:100%; min-height:95px; resize:vertical; background:#0e1b2d; color:var(--text); border:1px solid #395574; border-radius:8px; padding:11px; outline:none; font:inherit; }
+.description-section .rich-content { min-height:130px; }
+@media(max-width:600px) { .bulk-controls { width:100%; } .catalog-results { max-height:42vh; } }

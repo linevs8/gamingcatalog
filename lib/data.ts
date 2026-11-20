@@ -3,10 +3,14 @@ export type Game = {
   title: string;
   subtitle: string;
   coverUrl: string;
-  createdAt: number;
-  /** Provider identity is separate from the user-owned game ID. */
+  /** Authenticated IGDB metadata source, retained for existing imports. */
   provider?: "igdb";
   providerId?: number;
+  /** Stable external identifier, independent of this library entry. */
+  catalogId?: string;
+  /** Source-provided description; editing it never touches the game notebook. */
+  description?: string;
+  createdAt: number;
 };
 export type Category = {
   id: string;
@@ -34,11 +38,13 @@ export type Data = {
   noteTitles?: Record<string, string>;
   notePages?: Record<string, NotePage[]>;
   noteRevisions?: Record<string, NoteRevision[]>;
+  /** Soft-deleted note pages may be restored instead of being destroyed. */
+  deletedNotePages?: Record<string, (NotePage & {deletedAt: number})[]>;
   theme?: ThemeName;
   links: QuickLink[];
 };
 export const emptyData = (): Data => ({
-  version: 1, games: [], categories: [], shelves: [], memberships: [], notes: {}, noteTitles: {}, notePages: {}, noteRevisions: {}, theme: "midnight", links: []
+  version: 1, games: [], categories: [], shelves: [], memberships: [], notes: {}, noteTitles: {}, notePages: {}, noteRevisions: {}, deletedNotePages: {}, theme: "midnight", links: []
 });
 
 const DATABASE = "gaming-hq-local";
@@ -153,7 +159,12 @@ export function validateImport(raw: unknown): Data {
   if (d.games.length > 30000 || d.categories.length > 10000) throw new Error("Backup exceeds import safety limits.");
   for(const g of d.games) {
     if (!g || typeof g.id !== "string" || typeof g.title !== "string" ||
-        typeof g.coverUrl !== "string" || typeof g.subtitle !== "string") throw new Error("Invalid game record in backup.");
+        typeof g.coverUrl !== "string" || typeof g.subtitle !== "string" ||
+        (g.provider !== undefined && g.provider !== "igdb") ||
+        (g.providerId !== undefined && (!Number.isInteger(g.providerId) || g.providerId < 0)) ||
+        (g.catalogId !== undefined && typeof g.catalogId !== "string") ||
+        (g.description !== undefined && (typeof g.description !== "string" || g.description.length > 2_000_000)))
+      throw new Error("Invalid game record in backup.");
   }
   for(const c of d.categories) {
     if (!c || typeof c.id !== "string" || typeof c.name !== "string" || typeof c.location !== "string") throw new Error("Invalid category record in backup.");
@@ -174,6 +185,7 @@ export function validateImport(raw: unknown): Data {
   return {
     ...emptyData(), ...d,
     noteTitles: d.noteTitles || {}, notePages: d.notePages || {}, noteRevisions: d.noteRevisions || {},
+    deletedNotePages: d.deletedNotePages || {},
     theme: ["midnight","obsidian","violet","teal"].includes(d.theme || "") ? d.theme : "midnight"
   } as Data;
 }
