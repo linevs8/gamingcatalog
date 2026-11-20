@@ -76,7 +76,7 @@ export async function GET(request: NextRequest) {
 
     // Enrich only visible matches; don't download artwork for thousands of search hits.
     const [platforms, details] = await Promise.all([
-      databaseJson<Record<string, PlatformRecord>>("platforms/all.json").catch(() => ({})),
+      databaseJson<Record<string, PlatformRecord>>("platforms/all.json").catch((): Record<string, PlatformRecord> => ({})),
       Promise.all(matches.map(async match => {
         try { return await databaseJson<GameRecord>("games/" + match.id + ".json"); }
         catch { return null; }
