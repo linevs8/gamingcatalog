@@ -16,7 +16,7 @@ import {
   GripVertical, LayoutDashboard, Library, Link2, List, Menu, MoreHorizontal,
   Plus, Search, Settings2, Sparkles, Star, Trash2, X, PanelLeftClose, Pencil,
   Swords, Trophy, Heart, Users, Flame, Target, Bookmark, MonitorPlay,
-  Crown, Clock3, Compass, Puzzle, Zap, CalendarDays, FolderOpen, Shield, Coffee
+  Crown, Clock3, Compass, Puzzle, Zap, CalendarDays, FolderOpen, Shield, Coffee, RotateCcw
 } from "lucide-react";
 import {
   type Category, type Data, type Game, type QuickLink, emptyData,
@@ -81,6 +81,7 @@ export default function GamingHQ() {
   const [catalogError, setCatalogError] = useState("");
   const [libraryCollapsed, setLibraryCollapsed] = useState(false);
   const [librarySelected, setLibrarySelected] = useState<string[]>([]);
+  const [showDeletedNotes,setShowDeletedNotes]=useState(false);
   const [targetCategory, setTargetCategory] = useState("");
   const [categoryColor, setCategoryColor] = useState(colors[0]);
   const [categoryIcon, setCategoryIcon] = useState(icons[0]);
@@ -397,10 +398,42 @@ export default function GamingHQ() {
     }}));
     setNoteSelection(p=>({...p,[gameId]:id}));
   };
-  const deleteNotePage = (gameId: string,pageId: string) => {
-    if (!window.confirm("Delete this notes page and its contents? The main notes page won't be affected.")) return;
-    change(d=>({...d,notePages:{...(d.notePages||{}),[gameId]:(d.notePages?.[gameId]||[]).filter(p=>p.id!==pageId)}}));
+  const deleteNotePage=(gameId:string,pageId:string)=>{
+    if(!window.confirm("Move this page to Recently deleted?"))return;
+    change(d=>{
+      const page=(d.notePages?.[gameId]||[]).find(p=>p.id===pageId);
+      if(!page)return d;
+      return {...d,notePages:{...(d.notePages||{}),[gameId]:(d.notePages?.[gameId]||[]).filter(p=>p.id!==pageId)},
+        deletedNotePages:{...(d.deletedNotePages||{}),
+          [gameId]:[{...page,deletedAt:Date.now()},...(d.deletedNotePages?.[gameId]||[])].slice(0,30)}};
+    });
     setNoteSelection(p=>({...p,[gameId]:"current"}));
+  };
+  const restoreDeletedNote=(gameId:string,pageId:string)=>{
+    change(d=>{
+      const page=(d.deletedNotePages?.[gameId]||[]).find(p=>p.id===pageId);
+      if(!page)return d;
+      const restored={id:page.id,title:page.title,content:page.content,order:(d.notePages?.[gameId]||[]).length};
+      return {...d,notePages:{...(d.notePages||{}),[gameId]:[...(d.notePages?.[gameId]||[]),restored]},
+        deletedNotePages:{...(d.deletedNotePages||{}),[gameId]:(d.deletedNotePages?.[gameId]||[]).filter(p=>p.id!==pageId)}};
+    });
+    setNoteSelection(p=>({...p,[gameId]:pageId}));
+  };
+  const moveNotePage=(gameId:string,pageId:string,delta:number)=>{
+    change(d=>{
+      const pages=[...(d.notePages?.[gameId]||[])].sort((a,b)=>a.order-b.order);
+      const index=pages.findIndex(p=>p.id===pageId),target=index+delta;
+      if(index<0||target<0||target>=pages.length)return d;
+      [pages[index],pages[target]]=[pages[target],pages[index]];
+      return {...d,notePages:{...(d.notePages||{}),[gameId]:pages.map((p,i)=>({...p,order:i}))}};
+    });
+  };
+  const duplicateNotePage=(gameId:string,pageId:string)=>{
+    change(d=>{
+      const pages=d.notePages?.[gameId]||[],original=pages.find(p=>p.id===pageId);
+      if(!original)return d;
+      return {...d,notePages:{...(d.notePages||{}),[gameId]:[...pages,{...original,id:makeId(),title:original.title+" (copy)",order:pages.length}]}};
+    });
   };
   const renameNotePage = (gameId:string,pageId:string,currentName:string) => {
     const name=window.prompt("Rename notes page:",currentName)?.trim().slice(0,80);
@@ -473,10 +506,11 @@ export default function GamingHQ() {
       const notes={...d.notes}; delete notes[id];
       const noteTitles={...(d.noteTitles||{})}; delete noteTitles[id];
       const notePages={...(d.notePages||{})}; delete notePages[id];
+      const deletedNotePages={...(d.deletedNotePages||{})}; delete deletedNotePages[id];
       const noteRevisions={...(d.noteRevisions||{})};
       for(const key of Object.keys(noteRevisions)) if(key.startsWith(id+"/"))delete noteRevisions[key];
       return {...d, noteRevisions, games:d.games.filter(g=>g.id!==id), memberships:d.memberships.filter(m=>m.gameId!==id),
-        links:d.links.filter(l=>l.gameId!==id), notes, noteTitles,notePages};
+        links:d.links.filter(l=>l.gameId!==id), notes, noteTitles,notePages,deletedNotePages};
     });
     setModal(null);
     go("/library");
@@ -752,6 +786,9 @@ export default function GamingHQ() {
                     const p=data.notePages?.[game.id]?.find(p=>p.id===noteSelection[game.id]);
                     if(p)renameNotePage(game.id,p.id,p.title);
                   }}><Pencil size={15}/></button>
+                <button className="note-title-control" title="Move page left" aria-label="Move page left" onClick={()=>moveNotePage(game.id,noteSelection[game.id],-1)}><ArrowLeft size={15}/></button>
+                <button className="note-title-control" title="Move page right" aria-label="Move page right" onClick={()=>moveNotePage(game.id,noteSelection[game.id],1)}><ArrowRight size={15}/></button>
+                <button className="note-title-control" title="Duplicate page" aria-label="Duplicate page" onClick={()=>duplicateNotePage(game.id,noteSelection[game.id])}><BookOpen size={15}/></button>
                 <button className="note-title-control" aria-label="Delete notes page"
                   onClick={()=>deleteNotePage(game.id,noteSelection[game.id])}><Trash2 size={15}/></button>
               </div>
@@ -769,6 +806,9 @@ export default function GamingHQ() {
               [game.id]:(d.notePages?.[game.id]||[]).map(p=>p.id===noteSelection[game.id]?{...p,content:html}:p)}}))}/>
         }
         <div className="note-history-bar">
+          <button className="history-action" type="button" onClick={()=>setShowDeletedNotes(v=>!v)}>
+            <RotateCcw size={14}/> Recently deleted ({(data.deletedNotePages?.[game.id]||[]).length})
+          </button>
           <button className="history-action" type="button" onClick={()=>snapshotNote(game.id,pageId)}>
             <BookOpen size={14}/> Save checkpoint
           </button>
@@ -777,6 +817,12 @@ export default function GamingHQ() {
             <Clock3 size={14}/> History ({history.length})
           </button>
         </div>
+        {showDeletedNotes&&<div className="note-history-list">
+          {(data.deletedNotePages?.[game.id]||[]).length?
+            (data.deletedNotePages?.[game.id]||[]).map(page=><div className="note-history-row" key={page.id}>
+              <span>{page.title}</span><button className="secondary small-button" onClick={()=>restoreDeletedNote(game.id,page.id)}>Restore</button>
+            </div>):<p className="muted small">No recently deleted pages.</p>}
+        </div>}
         {showHistory[historyKey]&&<div className="note-history-list">
           {history.length?history.map(rev=><div key={rev.id} className="note-history-row">
             <span>{new Date(rev.createdAt).toLocaleString()}</span>
@@ -930,8 +976,8 @@ export default function GamingHQ() {
           <label>Game title<input autoFocus value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Kingdom Hearts Final Mix"/></label>
           <label>Subtitle / details <span className="muted">(optional)</span><input value={subtitle} onChange={e=>setSubtitle(e.target.value)} placeholder="e.g. PlayStation 2 · Action RPG"/></label>
           <label>Cover image URL <span className="muted">(optional)</span><input value={coverUrl} onChange={e=>setCoverUrl(e.target.value)} placeholder="https://…"/></label>
-          <label>Game description <span className="muted">(optional)</span><textarea rows={4} value={descriptionDraft}
-            onChange={e=>setDescriptionDraft(e.target.value)} placeholder="A short description…"/></label>
+          {modal.type==="game"&&<label>Game description <span className="muted">(optional)</span><textarea rows={4} value={descriptionDraft}
+            onChange={e=>setDescriptionDraft(e.target.value)} placeholder="A short description…"/></label>}
           {modal.type==="game"&&<label>Add to a category <span className="muted">(optional)</span><select value={targetCategory} onChange={e=>setTargetCategory(e.target.value)}>
             <option value="">Only add to Library</option>{data.categories.map(c=><option value={c.id} key={c.id}>{c.name}</option>)}</select></label>}</div>}
         {modal.type==="category"&&<div className="dialog-fields"><label>Category name<input autoFocus value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Priority, Solo, Multiplayer"/></label>
