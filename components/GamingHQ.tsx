@@ -967,7 +967,7 @@ export default function GamingHQ() {
             </button>)}
           </div>
           {!catalogBusy&&catalogQuery.trim().length>=2&&!catalogResults.length&&!catalogError&&<p className="muted small">No results. Try another spelling or add manually.</p>}
-          <button className="secondary" onClick={()=>openModal("catalog",undefined,modal.categoryId)}>
+          <button className="secondary" onClick={()=>openModal("game",undefined,modal.categoryId)}>
             <Plus size={16}/> Add manually (custom game)
           </button>
           <p className="muted small">Metadata from LizardByte GameDB / IGDB. Covers are editable.</p>
