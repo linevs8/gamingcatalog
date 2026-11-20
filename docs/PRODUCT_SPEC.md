@@ -182,3 +182,7 @@ Aims for a cohesive usable local-first baseline without pretending backend crede
 ## 17. IGDB search milestone
 
 Server-mediated Twitch OAuth client-credentials + IGDB `games` query, title/cover/release/platform preview, category-aware Add Game UI with search/manual tabs, duplicate detection using provider ID, existing-game reuse and manual fallback. External credentials remain a user setup step, never hardcoded or exposed to browser. The database remains the user's manually organized Library; IGDB is only a metadata source.
+
+## 18. Accounts and copy-polish milestone (October 21, 2026)
+
+Short, professional in-product language replaces placeholder milestone status copy. Guest-first local storage remains available. Optional Supabase email magic-link auth, Google OAuth (after provider configuration), and a private per-user cloud library have been added to the code. Existing guest data is preserved separately and a clear first-sync choice (cloud / guest / combine) is required when applicable. Optimistic revisions prevent silent last-writer overwrites across devices. Cloud operation requires live Supabase project configuration, migration and tested RLS policies before release.

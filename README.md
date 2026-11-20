@@ -13,13 +13,13 @@ Instead of a forced backlog or "daily rotation" system, **you** create the categ
 - **Categories & Shelves:** No deep nesting; custom colors and icons, independent Gallery/List views, rename, reorganization, shelves, and safe shelf deletion that moves categories back to Dashboard without deleting games.
 - **Drag & drop:** Hold briefly to move/reorder games and categories, drop onto sidebar destinations or named Shelves, with an **Undo** action. Sidebar arrows remain as an alternative.
 - **Game workspaces:** A **rich-text notebook** (bold, italics, headings, underline, link, color, bullets, numbering, checklists), a per-game renameable Current heading, optional extra note pages, checkpoint/restore history, and editable Quick Links.
-- **Guest saving & customization:** Browser-local autosave, Midnight Blue plus three optional themes, plus **JSON export/import** to move your data between browser origins.
+- **Saving & accounts:** Guest autosave, optional email sign-in and cloud sync (once Supabase is configured), explicit first-sync migration, Midnight Blue and three optional themes, and JSON export/import.
 - **Navigation:** Narrow collapsible sidebar, browser Back/Forward, real links and shareable route structure.
 
 ## What is still planned
 
 - Live IGDB search requires Twitch app credentials and compliance with IGDB's data/artwork terms. The UI and secure route are implemented, but until credentials are set, only manual creation works.
-- Optional account sign-in, secure cloud synchronization, and multi-device data.
+- Complete and verify production Supabase configuration, OAuth provider setup, Row Level Security and cross-device synchronization.
 - Further performance/accessibility/mobile QA, advanced bulk actions, enhanced note recovery and polish.
 
 **Important:** This remains a **local-first prototype**, not a production-grade personal cloud service. Clearing browser storage can erase guest data. **Export your backup before switching to a different Vercel preview URL**; each preview hostname has its own browser storage. Rich-text notes convert from legacy plain text when edited; retained legacy notes remain readable.
@@ -27,6 +27,12 @@ Instead of a forced backlog or "daily rotation" system, **you** create the categ
 ## Validation
 
 The GitHub Actions workflow runs TypeScript checking, pure organization invariants, and a Next.js production build. Automated CI passing does not substitute for clicking through real browsers and touch devices.
+
+## Optional Gaming HQ account
+
+Use **Sign in** at the top right to save your library to an account instead of this browser only. Email magic links are supported, and Google sign-in can be enabled once its OAuth provider is configured. Existing guest content is never silently replaced: the first sign-in asks whether to keep the cloud copy, upload the guest copy, or combine both.
+
+**Setup is required before live sign-in works:** connect a Supabase project, apply the private RLS migration, configure the project's URL and browser publishable key in Vercel Preview, and redeploy. See [Account & Cloud Setup](docs/SUPABASE_SETUP.md). Until then guest mode works normally.
 
 ## Enable live IGDB game search
 
