@@ -576,19 +576,37 @@ export default function GamingHQ() {
     return <div className="screen">
       <div className="page-top"><div><div className="eyebrow">THE MASTER COLLECTION</div><h1>All Games<span className="dot">.</span></h1>
         <p className="subline">Every game lives here, even when it appears in several categories.</p></div>
-        <button className="primary" onClick={()=>openModal("game")}><Plus size={17}/> Add Game</button></div>
+        <button className="primary" onClick={()=>openModal("catalog")}><Plus size={17}/> Import games</button></div>
       <div className="library-toolbar">
         <label className="search"><Search size={18}/><input aria-label="Search your games" placeholder="Search your library…" value={query} onChange={e=>setQuery(e.target.value)}/></label>
         <div className="segment"><button className={libraryView==="gallery"?"selected":""} onClick={()=>setLibraryView("gallery")} title="Gallery view"><LayoutDashboard size={17}/></button>
           <button className={libraryView==="list"?"selected":""} onClick={()=>setLibraryView("list")} title="List view"><List size={17}/></button></div>
       </div>
+      <div className="library-extra-actions">
+        <button className="secondary small-button" onClick={()=>setLibraryCollapsed(v=>!v)} aria-expanded={!libraryCollapsed}>
+          {libraryCollapsed?<ChevronRight size={15}/>:<ChevronDown size={15}/>}
+          {libraryCollapsed?"Show":"Hide"} game library ({filtered.length})
+        </button>
+        {!!librarySelected.length&&<div className="bulk-controls">
+          <span>{librarySelected.length} selected</span>
+          <select aria-label="Bulk category" value={targetCategory} onChange={e=>setTargetCategory(e.target.value)}>
+            <option value="">Choose category</option>{data.categories.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          <button className="secondary small-button" disabled={!targetCategory} onClick={()=>bulkAssign(targetCategory,true)}>Add to category</button>
+          <button className="secondary small-button" disabled={!targetCategory} onClick={()=>bulkAssign(targetCategory,false)}>Remove from category</button>
+          <button className="secondary small-button" onClick={()=>setLibrarySelected([])}>Clear selection</button>
+        </div>}
+      </div>
       {!data.games.length?<div className="blank-state compact"><div className="blank-symbol"><Library size={30}/></div>
-        <h2>Your library starts here.</h2><p>Add a game manually now. Game database search is coming in the next milestone.</p>
-        <button className="primary" onClick={()=>openModal("game")}><Plus size={17}/> Add a game</button>
-      </div>:!filtered.length?<div className="empty-search">No games match “{query}”.</div>:
+        <h2>Your library starts here.</h2><p>Import console, PC and browser games with cover art, or add your own.</p>
+        <button className="primary" onClick={()=>openModal("catalog")}><Plus size={17}/> Import games</button>
+      </div>:libraryCollapsed?<p className="muted small">Library hidden. Expand to browse your games.</p>:!filtered.length?<div className="empty-search">No games match “{query}”.</div>:
       <div className={libraryView==="gallery"?"games-grid":"games-list"}>
         {filtered.map(g=><DragItem key={g.id} id={"library-game/"+g.id} data={{kind:"game",categoryId:"library",gameId:g.id}}>
-          {GameCard({game:g,list:libraryView==="list",organize:true})}
+          <div className="selectable-game"><label className="game-select" title={"Select "+g.title}>
+            <input type="checkbox" aria-label={"Select "+g.title} checked={librarySelected.includes(g.id)}
+              onChange={e=>setLibrarySelected(prev=>e.target.checked?[...prev,g.id]:prev.filter(id=>id!==g.id))}/>
+          </label>{GameCard({game:g,list:libraryView==="list",organize:true})}</div>
         </DragItem>)}
       </div>}
     </div>;
@@ -628,7 +646,7 @@ export default function GamingHQ() {
           <button className="secondary" onClick={()=>openModal("pick-library",undefined,category.id)}>
             <Library size={16}/> From Library
           </button>
-          <button className="primary" onClick={()=>openModal("game",undefined,category.id)}>
+          <button className="primary" onClick={()=>openModal("catalog",undefined,category.id)}>
             <Plus size={16}/> New game
           </button>
           <div className="segment"><button className={category.view==="gallery"?"selected":""} onClick={()=>setCategory(category.id,{view:"gallery"})} aria-label="Gallery view"><LayoutDashboard size={17}/></button>
@@ -647,7 +665,7 @@ export default function GamingHQ() {
       {!games.length?<div className="blank-state compact"><div className="blank-symbol"><Gamepad2 size={30}/></div><h2>Nothing here yet.</h2>
         <p>Create a new game right here, or choose one you've already added to your Library.</p>
         <div className="empty-category-actions">
-          <button className="primary" onClick={()=>openModal("game",undefined,category.id)}>
+          <button className="primary" onClick={()=>openModal("catalog",undefined,category.id)}>
             <Plus size={17}/> Create a game
           </button>
           <button className="secondary" onClick={()=>openModal("pick-library",undefined,category.id)}>
@@ -681,12 +699,19 @@ export default function GamingHQ() {
         <div className="chips">{gameCategories.map(c=><Link key={c.id} href={"/category/"+c.id} className="chip">{c.name}</Link>)}
           {!gameCategories.length&&<span className="muted small">Only in Library</span>}</div>
       </div><button className="secondary icon-square" title="Organize game" aria-label="Organize game" onClick={()=>openModal("organize",game.id)}><MoreHorizontal size={20}/></button></div>
+      <section className="workspace-section description-section">
+        <div className="section-head"><div><div className="section-overline">ABOUT THIS GAME</div><h2>Description</h2></div>
+          <button className="secondary small-button" onClick={()=>openModal("edit-game",game.id)}><Pencil size={15}/> Edit details</button>
+        </div>
+        <RichNotes key={"description/"+game.id} note={game.description||""}
+          onChange={html=>change(d=>({...d,games:d.games.map(g=>g.id===game.id?{...g,description:html}:g)}))}/>
+      </section>
       <section className="workspace-section note-section">
         <div className="note-page-tabs" role="tablist" aria-label="Notes pages">
           <button type="button" role="tab" aria-selected={!noteSelection[game.id]||noteSelection[game.id]==="current"}
             className={!noteSelection[game.id]||noteSelection[game.id]==="current"?"selected":""}
             onClick={()=>setNoteSelection(p=>({...p,[game.id]:"current"}))}>Current</button>
-          {(data.notePages?.[game.id]||[]).sort((a,b)=>a.order-b.order).map(page=>
+          {[...(data.notePages?.[game.id]||[])].sort((a,b)=>a.order-b.order).map(page=>
             <button key={page.id} role="tab" aria-selected={noteSelection[game.id]===page.id}
               className={noteSelection[game.id]===page.id?"selected":""}
               onClick={()=>setNoteSelection(p=>({...p,[game.id]:page.id}))}>{page.title}</button>
@@ -879,14 +904,34 @@ export default function GamingHQ() {
     </div>}
     {modal&&<div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setModal(null)}}>
       <div className="dialog" role="dialog" aria-modal="true" aria-label={modal.type==="organize"?"Organize game":"Add new item"}>
-        <div className="dialog-head"><h2>{modal.type==="game"?"Add a game":modal.type==="edit-game"?"Edit game":
+        <div className="dialog-head"><h2>{modal.type==="catalog"?"Import games":modal.type==="game"?"Add a game":modal.type==="edit-game"?"Edit game":
           modal.type==="category"?"New category":modal.type==="shelf"?"New shelf":
           modal.type==="link"?"Add quick link":modal.type==="edit-link"?"Edit quick link":
           modal.type==="pick-library"?"Add from Library":"Organize game"}</h2><button className="icon-button" title="Close" onClick={()=>setModal(null)}><X size={20}/></button></div>
-        {(modal.type==="game"||modal.type==="edit-game")&&<div className="dialog-fields"><p className="muted small">Manual entry for now. Automatic game search is planned next.</p>
+        {modal.type==="catalog"&&<div className="dialog-fields">
+          <label>Search cross-platform games<input autoFocus value={catalogQuery} onChange={e=>setCatalogQuery(e.target.value)}
+            placeholder="Pokémon, Tekken Tag 2, Pokémon Showdown…"/></label>
+          {catalogBusy&&<p role="status" className="muted small">Searching game catalog…</p>}
+          {catalogError&&<p role="alert" className="field-error">{catalogError}</p>}
+          <div className="catalog-results">
+            {catalogResults.map(entry=><button className="catalog-result" key={entry.id} onClick={()=>importCatalogGame(entry)}>
+              {entry.coverUrl?<img src={entry.coverUrl} alt="" loading="lazy"/>:<div className="catalog-cover-fallback"><Gamepad2/></div>}
+              <span><strong>{entry.title}</strong><small>{entry.subtitle||"Unspecified platform"}</small></span>
+              {data.games.some(g=>g.catalogId===entry.id)?<span className="muted small">In library</span>:<Plus size={16}/>}
+            </button>)}
+          </div>
+          {!catalogBusy&&catalogQuery.trim().length>=2&&!catalogResults.length&&!catalogError&&<p className="muted small">No results. Try another spelling or add manually.</p>}
+          <button className="secondary" onClick={()=>openModal("catalog",undefined,modal.categoryId)}>
+            <Plus size={16}/> Add manually (custom game)
+          </button>
+          <p className="muted small">Metadata from LizardByte GameDB / IGDB. Covers are editable.</p>
+        </div>}
+        {(modal.type==="game"||modal.type==="edit-game")&&<div className="dialog-fields"><p className="muted small">Create a custom game or edit imported metadata. Notes stay unchanged.</p>
           <label>Game title<input autoFocus value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Kingdom Hearts Final Mix"/></label>
           <label>Subtitle / details <span className="muted">(optional)</span><input value={subtitle} onChange={e=>setSubtitle(e.target.value)} placeholder="e.g. PlayStation 2 · Action RPG"/></label>
           <label>Cover image URL <span className="muted">(optional)</span><input value={coverUrl} onChange={e=>setCoverUrl(e.target.value)} placeholder="https://…"/></label>
+          <label>Game description <span className="muted">(optional)</span><textarea rows={4} value={descriptionDraft}
+            onChange={e=>setDescriptionDraft(e.target.value)} placeholder="A short description…"/></label>
           {modal.type==="game"&&<label>Add to a category <span className="muted">(optional)</span><select value={targetCategory} onChange={e=>setTargetCategory(e.target.value)}>
             <option value="">Only add to Library</option>{data.categories.map(c=><option value={c.id} key={c.id}>{c.name}</option>)}</select></label>}</div>}
         {modal.type==="category"&&<div className="dialog-fields"><label>Category name<input autoFocus value={name} onChange={e=>setName(e.target.value)} placeholder="e.g. Priority, Solo, Multiplayer"/></label>
@@ -935,8 +980,8 @@ export default function GamingHQ() {
         </div>}
         {error&&<p role="alert" className="field-error">{error}</p>}
         <div className="dialog-footer"><button className="secondary" onClick={()=>setModal(null)}>
-          {modal.type==="organize"||modal.type==="pick-library"?"Done":"Cancel"}</button>
-          {modal.type!=="organize"&&modal.type!=="pick-library"&&<button className="primary" onClick={modal.type==="game"?addGame:modal.type==="edit-game"?saveEditedGame:
+          {modal.type==="organize"||modal.type==="pick-library"||modal.type==="catalog"?"Done":"Cancel"}</button>
+          {modal.type!=="organize"&&modal.type!=="pick-library"&&modal.type!=="catalog"&&<button className="primary" onClick={modal.type==="game"?addGame:modal.type==="edit-game"?saveEditedGame:
             modal.type==="category"?addCategory:modal.type==="shelf"?addShelf:
             modal.type==="edit-link"?saveEditedLink:addLink}>
             <Plus size={16}/>{modal.type==="game"?"Add game":modal.type==="edit-game"?"Save game":
