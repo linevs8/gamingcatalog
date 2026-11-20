@@ -23,7 +23,8 @@ import {
   loadData, makeId, notePreview, saveData, validCover, validateImport, type ThemeName
 } from "@/lib/data";
 
-type Modal = null | { type: "game" | "category" | "shelf" | "link" | "organize" | "pick-library" | "edit-game" | "edit-link"; gameId?: string; categoryId?: string; linkId?: string };
+type Modal = null | { type: "catalog" | "game" | "category" | "shelf" | "link" | "organize" | "pick-library" | "edit-game" | "edit-link"; gameId?: string; categoryId?: string; linkId?: string };
+type CatalogGame = { id: string; title: string; coverUrl: string; subtitle: string; description: string; source: string; platforms: string[]; year?: number };
 const colors = ["#77A9F7", "#B39BFA", "#70C8BE", "#E8B878", "#F29BAD", "#96B6D1"];
 const icons = [
   "star", "gamepad", "book", "sparkle", "swords", "trophy",
@@ -73,6 +74,13 @@ export default function GamingHQ() {
   const [name, setName] = useState("");
   const [subtitle, setSubtitle] = useState("");
   const [coverUrl, setCoverUrl] = useState("");
+  const [descriptionDraft, setDescriptionDraft] = useState("");
+  const [catalogQuery, setCatalogQuery] = useState("");
+  const [catalogResults, setCatalogResults] = useState<CatalogGame[]>([]);
+  const [catalogBusy, setCatalogBusy] = useState(false);
+  const [catalogError, setCatalogError] = useState("");
+  const [libraryCollapsed, setLibraryCollapsed] = useState(false);
+  const [librarySelected, setLibrarySelected] = useState<string[]>([]);
   const [targetCategory, setTargetCategory] = useState("");
   const [categoryColor, setCategoryColor] = useState(colors[0]);
   const [categoryIcon, setCategoryIcon] = useState(icons[0]);
@@ -94,6 +102,29 @@ export default function GamingHQ() {
   const backupInputRef = useRef<HTMLInputElement>(null);
   const [showPreferences,setShowPreferences] = useState(false);
   const [backupMessage,setBackupMessage] = useState("");
+  useEffect(() => {
+    if (modal?.type !== "catalog" || catalogQuery.trim().length < 2) {
+      setCatalogResults([]);
+      setCatalogBusy(false);
+      return;
+    }
+    const controller = new AbortController();
+    const timeout = window.setTimeout(async () => {
+      setCatalogBusy(true);
+      setCatalogError("");
+      try {
+        const response = await fetch("/api/catalog?q=" + encodeURIComponent(catalogQuery.trim()), {signal: controller.signal});
+        const json = await response.json();
+        if (!response.ok) throw new Error(json.error || "Catalog unavailable");
+        setCatalogResults(json.results || []);
+      } catch (error) {
+        if (!controller.signal.aborted) setCatalogError(error instanceof Error ? error.message : "Search failed");
+      } finally {
+        if (!controller.signal.aborted) setCatalogBusy(false);
+      }
+    }, 300);
+    return () => { window.clearTimeout(timeout); controller.abort(); };
+  }, [modal?.type, catalogQuery]);
   const sensors=useSensors(
     useSensor(PointerSensor,{activationConstraint:{delay:240,tolerance:6}}),
     useSensor(KeyboardSensor,{coordinateGetter:sortableKeyboardCoordinates})
@@ -177,6 +208,8 @@ export default function GamingHQ() {
     setName(type==="edit-game" ? existingGame?.title||"" : "");
     setSubtitle(type==="edit-game" ? existingGame?.subtitle||"" : "");
     setCoverUrl(type==="edit-game" ? existingGame?.coverUrl||"" : "");
+    setDescriptionDraft(type==="edit-game" ? existingGame?.description||"" : "");
+    if (type==="catalog") { setCatalogQuery(""); setCatalogResults([]); setCatalogError(""); }
     setLinkUrl(type==="edit-link" ? existingLink?.url||"" : "");
     setLinkName(type==="edit-link" ? existingLink?.title||"" : "");
     setTargetCategory(type === "game" ? categoryId || "" : "");
@@ -189,14 +222,14 @@ export default function GamingHQ() {
     if(!name.trim()){setError("Enter a game title.");return;}
     if(!validCover(coverUrl.trim())){setError("Cover must be a valid http(s) URL.");return;}
     change(d=>({...d,games:d.games.map(g=>g.id===modal.gameId?
-      {...g,title:name.trim(),subtitle:subtitle.trim(),coverUrl:coverUrl.trim()}:g)}));
+      {...g,title:name.trim(),subtitle:subtitle.trim(),coverUrl:coverUrl.trim(),description:descriptionDraft}:g)}));
     setModal(null);
   };
   const addGame = () => {
     const title = name.trim();
     if (!title) { setError("Enter a game title."); return; }
     if (!validCover(coverUrl.trim())) { setError("Cover must be a valid http(s) URL."); return; }
-    const game: Game = { id: makeId(), title, subtitle: subtitle.trim(), coverUrl: coverUrl.trim(), createdAt: Date.now() };
+    const game: Game = { id: makeId(), title, subtitle: subtitle.trim(), coverUrl: coverUrl.trim(), description:descriptionDraft, createdAt: Date.now() };
     change(d => ({
       ...d, games: [...d.games, game],
       memberships: targetCategory ? [...d.memberships, {
@@ -205,6 +238,32 @@ export default function GamingHQ() {
       }] : d.memberships
     }));
     setModal(null);
+  };
+  const importCatalogGame = (entry: CatalogGame) => {
+    const existing = data.games.find(g => g.catalogId === entry.id);
+    if (existing) { setModal(null); go("/game/" + existing.id); return; }
+    const game: Game = {id:makeId(),catalogId:entry.id,title:entry.title,subtitle:entry.subtitle,
+      coverUrl:entry.coverUrl,description:entry.description,createdAt:Date.now()};
+    change(d=>({...d,games:[...d.games,game],memberships:modal?.categoryId && d.categories.some(c=>c.id===modal.categoryId)?
+      [...d.memberships,{gameId:game.id,categoryId:modal.categoryId,
+      order:d.memberships.filter(m=>m.categoryId===modal.categoryId).length}]:d.memberships}));
+    setModal(null);
+    go("/game/"+game.id);
+  };
+  const bulkAssign=(categoryId:string,add:boolean)=>{
+    const selected=new Set(librarySelected);
+    change(d=>{
+      const keep=d.memberships.filter(m=>!(m.categoryId===categoryId && selected.has(m.gameId) && !add));
+      let members=keep;
+      if(add){
+        const present=new Set(keep.filter(m=>m.categoryId===categoryId).map(m=>m.gameId));
+        members=[...keep,...librarySelected.filter(id=>!present.has(id)).map((gameId,i)=>({
+          gameId,categoryId,order:keep.filter(m=>m.categoryId===categoryId).length+i
+        }))];
+      }
+      return {...d,memberships:members};
+    });
+    setLibrarySelected([]);
   };
   const addCategory = () => {
     if (!name.trim()) { setError("Name your category."); return; }
