@@ -162,6 +162,8 @@ function startServer(port) {
   const env = {
     ...process.env,
     NODE_ENV: "production",
+    // The official hosted service keeps IGDB credentials server-side. Never bundle the secret.
+    PLAYQUILL_IGDB_PROXY_ORIGIN: "https://gamingcatalog.vercel.app",
     HOSTNAME: "127.0.0.1",
     PORT: String(port),
   };
