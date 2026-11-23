@@ -47,6 +47,23 @@ export const emptyData = (): Data => ({
   version: 1, games: [], categories: [], shelves: [], memberships: [], notes: {}, noteTitles: {}, notePages: {}, noteRevisions: {}, deletedNotePages: {}, theme: "midnight", links: []
 });
 
+type DesktopStorage = {
+  load: () => Promise<Data | null>;
+  save: (data: Data) => Promise<boolean>;
+  saveSync: (data: Data) => boolean;
+};
+declare global {
+  interface Window { playquillDesktop?: DesktopStorage }
+}
+function desktopStorage(): DesktopStorage | undefined {
+  return typeof window === "undefined" ? undefined : window.playquillDesktop;
+}
+export function flushDesktopData(data: Data): boolean {
+  const desktop = desktopStorage();
+  if (!desktop) return false;
+  return desktop.saveSync(data);
+}
+
 const DATABASE = "gaming-hq-local";
 const KEY = "data";
 let pending: Promise<void> = Promise.resolve();
@@ -83,6 +100,12 @@ async function toDb(data: Data): Promise<void> {
   });
 }
 export async function loadData(): Promise<Data> {
+  const desktop = desktopStorage();
+  if (desktop) {
+    const value = await desktop.load();
+    if (value?.version === 1) return value;
+    // On first launch after upgrading, migrate any data from the current origin.
+  }
   try {
     const value = await fromDb();
     if (value?.version === 1) return value;
@@ -101,6 +124,8 @@ export async function loadData(): Promise<Data> {
 export function saveData(data: Data): Promise<void> {
   // Serialize writes, so an older snapshot cannot overwrite a newer one.
   const write = async () => {
+    const desktop = desktopStorage();
+    if (desktop) { await desktop.save(data); return; }
     try {
       await toDb(data);
     } catch {
