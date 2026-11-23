@@ -17,3 +17,5 @@
   .cloud-panel button{width:100%;align-self:stretch}
   .library-extra-actions{flex-wrap:wrap}
 }
+
+.modal-backdrop[hidden]{display:none!important}
