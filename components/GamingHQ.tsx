@@ -77,7 +77,8 @@ export default function GamingHQ() {
   useEffect(() => {
     const flush = () => { flushDesktopData(currentDataRef.current); };
     window.addEventListener("pagehide", flush);
-    return () => window.removeEventListener("pagehide", flush);
+    window.addEventListener("beforeunload", flush);
+    return () => { window.removeEventListener("pagehide", flush); window.removeEventListener("beforeunload", flush); };
   }, []);
   const lastAutoNoteSnapshot = useRef<Record<string, number>>({});
   const [modal, setModal] = useState<Modal>(null);
@@ -202,7 +203,7 @@ export default function GamingHQ() {
       }).catch(() => {
         if (latestRevision.current === rev) setSaveStatus("error");
       });
-    }, 320);
+    }, window.playquillDesktop ? 0 : 320);
     return () => window.clearTimeout(timeout);
   }, [data, ready]);
 
