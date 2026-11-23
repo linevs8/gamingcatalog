@@ -1,0 +1,19 @@
+/* Local-first quality improvements: pagination, cloud account panel and touch-friendly controls. */
+.library-pagination{display:flex;align-items:center;justify-content:flex-start;gap:12px;flex-wrap:wrap;
+  padding:13px 0;margin:10px 0;color:#bfb4a9;font-size:12px}
+.library-pagination .secondary{min-height:35px}
+.bulk-controls{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.bulk-delete{border-color:#8f5555!important;color:#f0b6af!important}
+.bulk-delete:hover{background:#402627!important}
+.cloud-panel{display:flex;flex-direction:column;align-items:stretch;gap:11px;padding:8px 0 4px}
+.cloud-panel input[type=email]{display:block;width:100%;min-height:42px;padding:9px 12px;margin-top:6px;
+  border-radius:7px;background:#131719;color:#f0e6dc;border:1px solid #51453d}
+.cloud-panel button{align-self:flex-start;min-height:36px}
+.cloud-panel button:disabled,.library-pagination button:disabled{opacity:.45}
+.preferences-dialog{max-height:min(90vh,900px);overflow-y:auto;overscroll-behavior:contain}
+@media(max-width:760px){
+  .library-pagination{gap:8px}
+  .library-pagination .secondary{min-height:42px}
+  .cloud-panel button{width:100%;align-self:stretch}
+  .library-extra-actions{flex-wrap:wrap}
+}
