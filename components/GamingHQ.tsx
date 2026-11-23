@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import RichNotes from "@/components/RichNotes";
+import CloudPanel from "@/components/CloudPanel";
 import { DndContext, PointerSensor, KeyboardSensor, closestCenter, useSensor, useSensors } from "@dnd-kit/core";
 import type { DragStartEvent, DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, rectSortingStrategy, verticalListSortingStrategy, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
@@ -70,6 +71,7 @@ export default function GamingHQ() {
   const [ready, setReady] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"saving" | "saved" | "error">("saved");
   const latestRevision = useRef(0);
+  const lastAutoNoteSnapshot = useRef<Record<string, number>>({});
   const [modal, setModal] = useState<Modal>(null);
   const [name, setName] = useState("");
   const [subtitle, setSubtitle] = useState("");
@@ -396,6 +398,28 @@ export default function GamingHQ() {
       memberships:d.memberships.filter(m=>m.categoryId!==id) }));
     setOpenCategoryMenu(false);
     go("/");
+  };
+  const updateNoteContent=(gameId:string,pageId:string,content:string)=>{
+    const key=gameId+"/"+pageId;
+    const now=Date.now();
+    change(d=>{
+      const previous=pageId==="current"?(d.notes[gameId]||""):
+        ((d.notePages?.[gameId]||[]).find(p=>p.id===pageId)?.content||"");
+      if(previous===content)return d;
+      const prior=d.noteRevisions?.[key]||[];
+      const due=previous.length>0 && (!lastAutoNoteSnapshot.current[key] ||
+        now-lastAutoNoteSnapshot.current[key]>90_000);
+      const nextRevisions=due && prior[0]?.content!==previous?
+        {...(d.noteRevisions||{}),
+          [key]:[{id:makeId(),content:previous,createdAt:now},...prior].slice(0,20)}:
+        d.noteRevisions;
+      if(due)lastAutoNoteSnapshot.current[key]=now;
+      if(pageId==="current")return {...d,notes:{...d.notes,[gameId]:content},
+        noteRevisions:nextRevisions};
+      return {...d,notePages:{...(d.notePages||{}),
+        [gameId]:(d.notePages?.[gameId]||[]).map(p=>p.id===pageId?{...p,content}:p)},
+        noteRevisions:nextRevisions};
+    });
   };
   const snapshotNote=(gameId:string,pageId:string)=>{
     change(d=>{
@@ -835,11 +859,10 @@ export default function GamingHQ() {
         </div>
         {(!noteSelection[game.id]||noteSelection[game.id]==="current")?
           <RichNotes key={game.id+":current:"+(noteRefresh[game.id+"/current"]||0)} note={data.notes[game.id]||""}
-            onChange={html=>change(d=>({...d,notes:{...d.notes,[game.id]:html}}))}/>:
+            onChange={html=>updateNoteContent(game.id,"current",html)}/>:
           <RichNotes key={game.id+":"+noteSelection[game.id]+":"+(noteRefresh[historyKey]||0)}
             note={data.notePages?.[game.id]?.find(p=>p.id===noteSelection[game.id])?.content||""}
-            onChange={html=>change(d=>({...d,notePages:{...(d.notePages||{}),
-              [game.id]:(d.notePages?.[game.id]||[]).map(p=>p.id===noteSelection[game.id]?{...p,content:html}:p)}}))}/>
+            onChange={html=>updateNoteContent(game.id,pageId,html)}/>
         }
         <div className="note-history-bar">
           <button className="history-action" type="button" onClick={()=>setShowDeletedNotes(v=>!v)}>
@@ -982,6 +1005,13 @@ export default function GamingHQ() {
             onChange={e=>{const file=e.currentTarget.files?.[0];if(file)void importBackup(file);}}/>
           <button className="secondary" onClick={()=>backupInputRef.current?.click()}>Import backup (replace this library)</button>
           {backupMessage&&<p role="status" className="muted small">{backupMessage}</p>}
+          <div className="dialog-separator"/>
+          <CloudPanel localData={data} onRestore={async imported=>{
+            await saveData(imported);
+            setData(imported);
+            setLibrarySelected([]);
+            setBackupMessage("Cloud library restored locally. Export a new backup if you wish.");
+          }}/>
         </div>
         <div className="dialog-footer"><button className="primary" onClick={()=>setShowPreferences(false)}>Done</button></div>
       </div>
