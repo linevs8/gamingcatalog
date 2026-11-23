@@ -1,14 +1,184 @@
-const { app, BrowserWindow, dialog, shell } = require("electron");
-const { spawn } = require("node:child_process");
+// Playquill native Windows shell. Next.js runs in an Electron utility
+// process, not by launching the portable .exe again as in the original build.
+const { app, BrowserWindow, dialog, shell, utilityProcess } = require("electron");
 const fs = require("node:fs");
+const net = require("node:net");
 const http = require("node:http");
 const path = require("node:path");
 
-const PORT = 41771;
-const URL = `http://127.0.0.1:${PORT}`;
-let serverProcess = null;
+const smokeMode = process.argv.includes("--playquill-smoke-test");
+const smokeReportArg = process.argv.find(arg => arg.startsWith("--playquill-smoke-report="));
+const smokeReportFile = smokeReportArg ? smokeReportArg.slice("--playquill-smoke-report=".length) : null;
+const MAX_STARTUP_MS = 60000;
+
+let server = null;
+let serverExited = false;
+let serverExitMessage = "";
 let mainWindow = null;
-let stopping = false;
+let starting = true;
+let shuttingDown = false;
+let homeURL = "";
+let logFile = "";
+
+function log(message) {
+  const line = "[" + new Date().toISOString() + "] " + String(message) + "\n";
+  try {
+    if (logFile) fs.appendFileSync(logFile, line, "utf8");
+  } catch { /* Logging must never prevent startup */ }
+  try { process.stdout.write(line); } catch { /* GUI apps may not have stdout */ }
+}
+function reportSmoke(result) {
+  if (!smokeReportFile) return;
+  try {
+    fs.mkdirSync(path.dirname(smokeReportFile), { recursive: true });
+    fs.writeFileSync(smokeReportFile, JSON.stringify(result, null, 2), "utf8");
+  } catch (error) { log("Failed writing smoke report: " + error); }
+}
+function fail(error) {
+  const message = error instanceof Error ? error.message : String(error);
+  log("STARTUP FAILURE: " + message);
+  reportSmoke({ ok: false, error: message, serverExitMessage, logFile });
+  if (!smokeMode) dialog.showErrorBox("Playquill couldn't start", message + "\n\nDiagnostic log:\n" + logFile);
+  app.exit(1);
+}
+function serverDirectory() {
+  return app.isPackaged
+    ? path.join(process.resourcesPath, "app-server")
+    : path.join(__dirname, "..", ".next", "standalone");
+}
+function pickFreePort() {
+  return new Promise((resolve, reject) => {
+    const probe = net.createServer();
+    probe.once("error", reject);
+    probe.listen(0, "127.0.0.1", () => {
+      const address = probe.address();
+      if (!address || typeof address === "string") {
+        probe.close();
+        reject(new Error("Unable to allocate a loopback port"));
+        return;
+      }
+      probe.close(err => err ? reject(err) : resolve(address.port));
+    });
+  });
+}
+function getLocal(url) {
+  return new Promise((resolve, reject) => {
+    const req = http.get(url, { timeout: 2200 }, response => {
+      let body = "";
+      response.setEncoding("utf8");
+      response.on("data", chunk => {
+        if (body.length < 400000) body += chunk;
+      });
+      response.on("end", () => resolve({ status: response.statusCode || 0, body }));
+    });
+    req.on("error", reject);
+    req.on("timeout", () => req.destroy(new Error("Server request timed out")));
+  });
+}
+async function checkServer() {
+  const root = await getLocal(homeURL + "/");
+  if (root.status !== 200 || !root.body.includes("<title>Playquill</title>")) {
+    throw new Error("Local server did not return the Playquill application");
+  }
+  const match = root.body.match(/href="(\/_next\/static\/css\/[^"]+\.css)"/);
+  if (!match) throw new Error("Playquill's stylesheet is missing");
+  const sheet = await getLocal(homeURL + match[1]);
+  if (sheet.status !== 200 || !sheet.body.includes(".app-shell")) {
+    throw new Error("Playquill's stylesheet failed to load");
+  }
+  return { html: root.status, css: sheet.status, cssPath: match[1] };
+}
+async function waitForReady() {
+  const start = Date.now();
+  let previous = "";
+  while (Date.now() - start < MAX_STARTUP_MS) {
+    if (serverExited) throw new Error("Local server stopped during startup: " + serverExitMessage);
+    try { return await checkServer(); }
+    catch (error) { previous = String(error); }
+    await new Promise(resolve => setTimeout(resolve, 450));
+  }
+  throw new Error("Local server didn't become ready in 60 seconds. " +
+    (serverExitMessage || previous) + "\nSee " + logFile);
+}
+function startServer(port) {
+  const directory = serverDirectory();
+  const entrypoint = path.join(directory, "server.js");
+  if (!fs.existsSync(entrypoint)) {
+    throw new Error("The bundled Next.js server.js is missing: " + entrypoint);
+  }
+  const staticAssets = path.join(directory, ".next", "static");
+  if (!fs.existsSync(staticAssets)) {
+    throw new Error("The bundled Next.js static assets are missing: " + staticAssets);
+  }
+  log("Starting local Next.js using Electron utilityProcess at " + directory);
+  const env = {
+    ...process.env,
+    NODE_ENV: "production",
+    HOSTNAME: "127.0.0.1",
+    PORT: String(port),
+  };
+  delete env.ELECTRON_RUN_AS_NODE;
+  server = utilityProcess.fork(entrypoint, [], {
+    cwd: directory,
+    env,
+    stdio: "pipe",
+    serviceName: "Playquill local server",
+  });
+  server.stdout?.on("data", chunk => log("[Next] " + String(chunk).trimEnd()));
+  server.stderr?.on("data", chunk => log("[Next error] " + String(chunk).trimEnd()));
+  server.on("spawn", () => log("Next utility process spawned"));
+  server.on("exit", code => {
+    serverExited = true;
+    serverExitMessage = "exit code " + code;
+    log("Next utility process exited: " + serverExitMessage);
+    if (!starting && !shuttingDown) {
+      dialog.showErrorBox("Playquill server stopped", "The local server stopped unexpectedly.\n\nLog:\n" + logFile);
+      app.quit();
+    }
+  });
+}
+function createWindow() {
+  mainWindow = new BrowserWindow({
+    title: "Playquill",
+    width: 1440,
+    height: 900,
+    minWidth: 900,
+    minHeight: 620,
+    show: false,
+    center: true,
+    backgroundColor: "#0c0e11",
+    autoHideMenuBar: true,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true,
+      webSecurity: true,
+    },
+  });
+  let shown = false;
+  const show = () => {
+    if (shown || !mainWindow || mainWindow.isDestroyed()) return;
+    shown = true;
+    mainWindow.show();
+  };
+  mainWindow.once("ready-to-show", show);
+  mainWindow.webContents.once("did-finish-load", show);
+  mainWindow.webContents.on("did-fail-load", (_event, code, detail, url) => {
+    log("Renderer failed to load " + url + ": " + code + " " + detail);
+  });
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//i.test(url)) void shell.openExternal(url);
+    return { action: "deny" };
+  });
+  mainWindow.webContents.on("will-navigate", (event, url) => {
+    if (url !== homeURL && !url.startsWith(homeURL + "/")) {
+      event.preventDefault();
+      if (/^https?:\/\//i.test(url)) void shell.openExternal(url);
+    }
+  });
+  mainWindow.on("closed", () => { mainWindow = null; });
+  void mainWindow.loadURL(homeURL + "/");
+}
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
@@ -18,111 +188,31 @@ if (!app.requestSingleInstanceLock()) {
     if (mainWindow.isMinimized()) mainWindow.restore();
     mainWindow.focus();
   });
-
-  function serverRoot() {
-    return app.isPackaged
-      ? path.join(process.resourcesPath, "app-server")
-      : path.join(__dirname, "..", ".next", "standalone");
-  }
-
-  function beginServer() {
-    const workingDirectory = serverRoot();
-    const entrypoint = path.join(workingDirectory, "server.js");
-    if (!fs.existsSync(entrypoint)) {
-      throw new Error("The local Playquill server was not included in this build.");
-    }
-    // In an Electron distribution, its executable doubles as Node when this
-    // environment variable is set. No external Node installation is necessary.
-    serverProcess = spawn(process.execPath, [entrypoint], {
-      cwd: workingDirectory,
-      windowsHide: true,
-      stdio: ["ignore", "pipe", "pipe"],
-      env: {
-        ...process.env,
-        ELECTRON_RUN_AS_NODE: "1",
-        NODE_ENV: "production",
-        HOSTNAME: "127.0.0.1",
-        PORT: String(PORT),
-      },
-    });
-    serverProcess.on("error", (error) => console.error("Playquill server error:", error));
-    serverProcess.stdout?.on("data", (chunk) => process.stdout.write(chunk));
-    serverProcess.stderr?.on("data", (chunk) => process.stderr.write(chunk));
-  }
-
-  function serverAvailable() {
-    return new Promise((resolve) => {
-      const request = http.get(URL, { timeout: 1250 }, (response) => {
-        response.resume();
-        resolve(response.statusCode >= 200 && response.statusCode < 500);
-      });
-      request.on("error", () => resolve(false));
-      request.on("timeout", () => { request.destroy(); resolve(false); });
-    });
-  }
-
-  async function waitForServer() {
-    // Poll startup rather than loading an empty window during Next.js boot.
-    for (let attempt = 0; attempt < 120; attempt += 1) {
-      if (serverProcess && serverProcess.exitCode !== null) break;
-      if (await serverAvailable()) return;
-      await new Promise((resolve) => setTimeout(resolve, 250));
-    }
-    throw new Error("Playquill's local server did not start. Port 41771 may be occupied.");
-  }
-
-  function createWindow() {
-    mainWindow = new BrowserWindow({
-      width: 1440,
-      height: 900,
-      minWidth: 900,
-      minHeight: 620,
-      title: "Playquill",
-      show: false,
-      backgroundColor: "#0c0e11",
-      autoHideMenuBar: true,
-      webPreferences: {
-        nodeIntegration: false,
-        contextIsolation: true,
-        sandbox: true,
-      },
-    });
-
-    mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-      if (/^https?:\/\//i.test(url)) shell.openExternal(url);
-      return { action: "deny" };
-    });
-    mainWindow.webContents.on("will-navigate", (event, url) => {
-      if (!url.startsWith(URL + "/") && url !== URL) {
-        event.preventDefault();
-        if (/^https?:\/\//i.test(url)) shell.openExternal(url);
-      }
-    });
-
-    mainWindow.once("ready-to-show", () => mainWindow?.show());
-    mainWindow.on("closed", () => { mainWindow = null; });
-    mainWindow.loadURL(URL);
-  }
-
   app.whenReady().then(async () => {
     try {
-      // Never display an unrelated service that happens to occupy our port.
-      if (await serverAvailable()) {
-        throw new Error("Port 41771 is in use. Close the conflicting service before starting Playquill.");
+      logFile = path.join(app.getPath("userData"), "startup.log");
+      log("Playquill boot, packaged=" + app.isPackaged + ", smoke=" + smokeMode);
+      const port = await pickFreePort();
+      homeURL = "http://127.0.0.1:" + port;
+      startServer(port);
+      const status = await waitForReady();
+      log("Local server healthy: " + JSON.stringify(status));
+      starting = false;
+      if (smokeMode) {
+        reportSmoke({ ok: true, ...status, packaged: app.isPackaged });
+        app.quit();
+      } else {
+        createWindow();
       }
-      beginServer();
-      await waitForServer();
-      createWindow();
     } catch (error) {
-      dialog.showErrorBox("Playquill couldn't start", String(error));
-      app.quit();
+      fail(error);
     }
   });
-
   app.on("before-quit", () => {
-    if (stopping) return;
-    stopping = true;
-    if (serverProcess && serverProcess.exitCode === null) serverProcess.kill();
+    shuttingDown = true;
+    if (server) {
+      try { server.kill(); } catch (error) { log("Server kill failed: " + error); }
+    }
   });
-  app.on("window-all-closed", () => app.quit());
+  app.on("window-all-closed", () => { if (!smokeMode) app.quit(); });
 }
