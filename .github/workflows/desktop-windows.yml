@@ -1,12 +1,7 @@
 name: Build Playquill Windows EXE
 
+# Desktop packaging is explicitly paused until the README product TODOs and Windows smoke tests pass.
 on:
-  push:
-    branches:
-      - feature/work-catchup-2026-11-20
-  pull_request:
-    branches:
-      - main
   workflow_dispatch:
 
 permissions:
