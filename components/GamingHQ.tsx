@@ -512,7 +512,7 @@ export default function GamingHQ() {
     let checked = 0;
     const pending = games.filter(g => !g.coverUrl).slice(0, 200);
     const normalize = (value: string) => value.normalize("NFKD")
-      .replace(/[\\u0300-\\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+      .replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
     try {
       for (const game of pending) {
         setCoverProgress("Finding covers: " + checked + "/" + pending.length + " · " + filled + " found");
