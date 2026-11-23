@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import {
   type Category, type Data, type Game, type QuickLink, emptyData,
-  loadData, makeId, notePreview, saveData, validCover, validateImport, type ThemeName
+  loadData, makeId, notePreview, saveData, flushDesktopData, validCover, validateImport, type ThemeName
 } from "@/lib/data";
 
 type Modal = null | { type: "catalog" | "game" | "category" | "shelf" | "link" | "organize" | "pick-library" | "edit-game" | "edit-link"; gameId?: string; categoryId?: string; linkId?: string };
@@ -72,6 +72,13 @@ export default function GamingHQ() {
   const [ready, setReady] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"saving" | "saved" | "error">("saved");
   const latestRevision = useRef(0);
+  const currentDataRef = useRef(data);
+  currentDataRef.current = data;
+  useEffect(() => {
+    const flush = () => { flushDesktopData(currentDataRef.current); };
+    window.addEventListener("pagehide", flush);
+    return () => window.removeEventListener("pagehide", flush);
+  }, []);
   const lastAutoNoteSnapshot = useRef<Record<string, number>>({});
   const [modal, setModal] = useState<Modal>(null);
   const [name, setName] = useState("");
@@ -134,7 +141,7 @@ export default function GamingHQ() {
       for(const result of [db,igdb])if(result.status==="fulfilled")
         for(const game of result.value)if(!found.has(game.id))found.set(game.id,game);
       setCatalogResults([...found.values()]);
-      if(!found.size&&db.status==="rejected")setCatalogError("Search unavailable. Add the game manually instead.");
+      if(!found.size && db.status==="rejected") setCatalogError("Online search unavailable. Use Add manually below — it works without the catalog.");
       setCatalogBusy(false);
     },350);
     return ()=>{window.clearTimeout(t);ctrl.abort();};
@@ -1018,8 +1025,8 @@ export default function GamingHQ() {
             </button>)}
           </div>
           {!catalogBusy&&catalogQuery.trim().length>=2&&!catalogResults.length&&!catalogError&&<p className="muted small">No results. Try another spelling or add manually.</p>}
-          <button className="secondary" onClick={()=>openModal("game",undefined,modal.categoryId)}>
-            <Plus size={16}/> Add manually
+          <button type="button" className="primary" onClick={()=>openModal("game",undefined,modal.categoryId)}>
+            <Plus size={16}/> Add a game manually
           </button>
           <p className="muted small">Covers can be changed later.</p>
         </div>}
