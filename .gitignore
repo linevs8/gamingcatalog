@@ -5,3 +5,7 @@ out/
 !.env.example
 *.tsbuildinfo
 .DS_Store
+
+dist/
+release/
+*.log
