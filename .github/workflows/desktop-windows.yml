@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - feature/work-catchup-2026-11-20
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
