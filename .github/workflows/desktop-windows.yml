@@ -42,6 +42,16 @@ jobs:
       - name: Create unpacked Windows app for smoke test
         run: npx electron-builder --win --x64 --dir --publish never
 
+      - name: Verify packaged Next.js dependencies
+        shell: pwsh
+        run: |
+          $sourceNext = ".next/standalone/node_modules/next/package.json"
+          $packagedNext = "dist/win-unpacked/resources/app-server/node_modules/next/package.json"
+          Write-Host "Standalone Next.js module present: $(Test-Path $sourceNext)"
+          Write-Host "Packaged Next.js module present: $(Test-Path $packagedNext)"
+          if (!(Test-Path $sourceNext)) { throw "Next standalone output omitted its Next.js runtime" }
+          if (!(Test-Path $packagedNext)) { throw "Electron package omitted the Next.js runtime" }
+
       - name: Smoke-test packaged EXE and local server
         run: node scripts/smoke-windows.cjs dist/win-unpacked/Playquill.exe
 
