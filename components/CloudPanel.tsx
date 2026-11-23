@@ -12,6 +12,7 @@ type Props = { localData: Data; localSaveStatus: "saving" | "saved" | "error"; o
 export default function CloudPanel({ localData, localSaveStatus, onRestore }: Props) {
   const client = useMemo(() => cloudClient(), []);
   const [user, setUser] = useState<User | null>(null);
+  const lastUserId = useRef<string | null>(null);
   const [email, setEmail] = useState("");
   const [remote, setRemote] = useState<Remote | null>(null);
   const [status, setStatus] = useState("");
@@ -26,17 +27,20 @@ export default function CloudPanel({ localData, localSaveStatus, onRestore }: Pr
     let mounted = true;
     void client.auth.getUser().then(({ data, error }) => {
       if (!mounted) return;
+      lastUserId.current = error ? null : (data.user?.id ?? null);
       setUser(error ? null : data.user);
     });
-    const { data: listener } = client.auth.onAuthStateChange((event, session) => {
+    const { data: listener } = client.auth.onAuthStateChange((_event, session) => {
       if (!mounted) return;
-      setUser(session?.user ?? null);
-      if (event === "SIGNED_OUT" || event === "SIGNED_IN") {
+      const nextUserId = session?.user?.id ?? null;
+      if (lastUserId.current !== nextUserId) {
         setRemote(null);
         setLoaded(false);
         setAutoSync(false);
         lastSynced.current = "";
       }
+      lastUserId.current = nextUserId;
+      setUser(session?.user ?? null);
     });
     return () => { mounted = false; listener.subscription.unsubscribe(); };
   }, [client]);
