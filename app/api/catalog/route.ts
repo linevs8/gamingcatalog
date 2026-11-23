@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { catalogBucket } from "@/lib/catalog-bucket";
 
 type IndexRecord = { name: string };
 type GameRecord = {
@@ -65,7 +66,7 @@ export async function GET(request: NextRequest) {
   if (query.length < 2) return NextResponse.json({ results: [], message: "Type at least two characters." });
   // GameDB buckets use the original title’s first two characters, not the
   // first two alphanumerics: "9 Kings" is indexed under "9", not "9k".
-  const bucket = /^[a-z0-9] [a-z0-9]/.test(query) ? query[0] : query.replace(/[^a-z0-9]/g, "").slice(0, 2);
+  const bucket = catalogBucket(query);
   if (!bucket) return NextResponse.json({ results: [] });
   try {
     const index = await databaseJson<Record<string, IndexRecord>>("buckets/" + bucket + ".json");
