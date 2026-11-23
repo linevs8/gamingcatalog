@@ -42,6 +42,14 @@ proc.once("exit", (code, signal) => {
     try { fs.unlinkSync(report); } catch {}
   }
   console.log("Playquill packaged runtime report:", JSON.stringify(result));
+  if (!result.ok && result.logFile) {
+    try {
+      const diagnostic = fs.readFileSync(result.logFile, "utf8");
+      console.error("=== PLAYQUILL STARTUP LOG ===\\n" + diagnostic.slice(-15000));
+    } catch (error) {
+      console.error("Could not read startup log:", error);
+    }
+  }
   if (code !== 0 || signal || !result.ok || result.html !== 200 ||
       result.css !== 200 || result.packaged !== true) {
     process.exitCode = 1;
