@@ -134,6 +134,36 @@ export default function CloudPanel({ localData, localSaveStatus, onRestore }: Pr
     } finally { setBusy(false); }
   };
 
+  // Opt-in automatic backup. No background replacement of local data.
+  useEffect(() => {
+    if (!autoSync || !client || !user || !loaded || !remote || busy ||
+        localSaveStatus !== "saved" || lastSynced.current === signature) return;
+    const revision = remote.revision;
+    const timeout = window.setTimeout(async () => {
+      setBusy(true);
+      try {
+        const { data, error } = await client.from("playquill_snapshots")
+          .update({ data: localData, revision: revision + 1, updated_at: new Date().toISOString() })
+          .eq("user_id", user.id).eq("revision", revision)
+          .select("data,revision,updated_at").maybeSingle();
+        if (error) throw error;
+        if (!data) {
+          setAutoSync(false);
+          setLoaded(false);
+          setStatus("Cloud backup paused: another device changed the cloud copy. Review it before uploading.");
+        } else {
+          lastSynced.current = signature;
+          setRemote(data as Remote);
+          setStatus("Latest local changes backed up to cloud.");
+        }
+      } catch (error) {
+        setAutoSync(false);
+        setStatus("Automatic backup paused: " + (error instanceof Error ? error.message : "Connection failed"));
+      } finally { setBusy(false); }
+    }, 2200);
+    return () => window.clearTimeout(timeout);
+  }, [autoSync, client, user, loaded, remote, busy, localSaveStatus, localData, signature]);
+
   return <div className="cloud-panel">
     <div className="setting-caption">OPTIONAL CLOUD LIBRARY</div>
     {!client ? <p className="muted small">
@@ -164,6 +194,13 @@ export default function CloudPanel({ localData, localSaveStatus, onRestore }: Pr
         {remote && <button className="secondary" disabled={busy} onClick={()=>void restore()}>
           Restore cloud copy to this device…
         </button>}
+        {remote && <button className="secondary" disabled={busy || localSaveStatus!=="saved" ||
+          (!autoSync && lastSynced.current!==signature)}
+          onClick={()=>setAutoSync(previous=>!previous)}>
+          {autoSync?"Pause automatic cloud backup":"Enable automatic cloud backup on this device"}
+        </button>}
+        {remote && !autoSync && lastSynced.current!==signature &&
+          <p className="muted small">Upload or restore once before enabling automatic backups.</p>}
       </>}
       <button className="secondary small-button" disabled={busy} onClick={()=>void client.auth.signOut()}>
         Sign out
