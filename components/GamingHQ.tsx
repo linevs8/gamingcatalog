@@ -11,6 +11,7 @@ import { SortableItem, DragItem, DropTarget } from "@/components/DragItems";
 import type { DragInfo, TargetInfo } from "@/components/DragItems";
 import { moveGamePlacement, reorderCategories, placeCategory } from "@/lib/organization";
 import { libraryPage, removeLibraryGames } from "@/lib/library";
+import { parseGamesImport, mergeImportedGames } from "@/lib/games-import";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Archive, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BookOpen, Check,
@@ -114,6 +115,7 @@ export default function GamingHQ() {
   const [showHistory,setShowHistory]=useState<Record<string,boolean>>({});
   const [noteRefresh,setNoteRefresh]=useState<Record<string,number>>({});
   const backupInputRef = useRef<HTMLInputElement>(null);
+  const gamesInputRef = useRef<HTMLInputElement>(null);
   const [showPreferences,setShowPreferences] = useState(false);
   const [backupMessage,setBackupMessage] = useState("");
   useEffect(()=>{
@@ -501,6 +503,29 @@ export default function GamingHQ() {
     window.setTimeout(()=>URL.revokeObjectURL(url),2000);
     setBackupMessage("Backup downloaded. Keep it somewhere safe.");
   };
+  const importGamesOnly = async (file: File) => {
+    try {
+      if (file.size > 5_000_000) throw new Error("Games file is too large.");
+      const entries = parseGamesImport(JSON.parse(await file.text()));
+      const result = mergeImportedGames(currentDataRef.current, entries);
+      if (result.added === 0) {
+        setBackupMessage("No new games. " + result.skipped + " already in your library.");
+        return;
+      }
+      await saveData(result.data);
+      currentDataRef.current = result.data;
+      setData(result.data);
+      setBackupMessage("Imported " + result.added + " game" + (result.added === 1 ? "" : "s") +
+        " (" + result.skipped + " duplicates skipped). Your categories and notes were not changed.");
+      setModal(null);
+      go("/library");
+    } catch (error) {
+      setBackupMessage(error instanceof Error ? error.message : "Couldn't read that games file.");
+      setShowPreferences(true);
+    } finally {
+      if (gamesInputRef.current) gamesInputRef.current.value = "";
+    }
+  };
   const importBackup = async (file: File) => {
     try {
       if (file.size > 25_000_000) throw new Error("Backup file is too large.");
@@ -663,6 +688,7 @@ export default function GamingHQ() {
       <div className="page-top"><div><div className="eyebrow">THE MASTER COLLECTION</div><h1>All Games<span className="dot">.</span></h1>
         <p className="subline">Every game lives here, even when it appears in several categories.</p></div>
         <button className="primary" onClick={()=>openModal("catalog")}><Plus size={17}/> Import games</button></div>
+      <div className="library-import-actions"><button className="secondary small-button" onClick={()=>gamesInputRef.current?.click()}>Import games from JSON</button></div>
       <div className="library-toolbar">
         <label className="search"><Search size={18}/><input aria-label="Search your games" placeholder="Search your library…" value={query} onChange={e=>setQuery(e.target.value)}/></label>
         <div className="segment"><button className={libraryView==="gallery"?"selected":""} onClick={()=>setLibraryView("gallery")} title="Gallery view"><LayoutDashboard size={17}/></button>
@@ -991,6 +1017,10 @@ export default function GamingHQ() {
           </div>
           <div className="dialog-separator"/>
           <div><div className="setting-caption">DATA & BACKUPS</div><p className="muted small">Local autosaving remains active. Cloud backup is optional and only runs after you enable it. Export regularly and before switching preview URLs.</p></div>
+          <input ref={gamesInputRef} type="file" accept=".json,application/json" className="hidden-backup-input"
+            onChange={e=>{const file=e.currentTarget.files?.[0];if(file)void importGamesOnly(file);}}/>
+          <button className="secondary" onClick={()=>gamesInputRef.current?.click()}>Import games only (JSON)</button>
+          <p className="muted small">Adds new titles to All Games; skips duplicates and leaves your categories, notes, and sorting untouched.</p>
           <button className="secondary" onClick={exportBackup}>Download JSON backup</button>
           <input ref={backupInputRef} type="file" accept=".json,application/json" className="hidden-backup-input"
             onChange={e=>{const file=e.currentTarget.files?.[0];if(file)void importBackup(file);}}/>
