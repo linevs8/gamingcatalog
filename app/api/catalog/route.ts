@@ -63,7 +63,10 @@ export async function GET(request: NextRequest) {
   const input = (request.nextUrl.searchParams.get("q") || "").slice(0, 100);
   const query = normalizeTitle(input);
   if (query.length < 2) return NextResponse.json({ results: [], message: "Type at least two characters." });
-  // GameDB buckets use the original title’s first two characters, not the\n  // first two alphanumerics: "9 Kings" is indexed under "9", not "9k".\n  const bucket = /^[a-z0-9] [a-z0-9]/.test(query) ? query[0] : query.replace(/[^a-z0-9]/g, "").slice(0, 2);\n  if (!bucket) return NextResponse.json({ results: [] });
+  // GameDB buckets use the original title’s first two characters, not the
+  // first two alphanumerics: "9 Kings" is indexed under "9", not "9k".
+  const bucket = /^[a-z0-9] [a-z0-9]/.test(query) ? query[0] : query.replace(/[^a-z0-9]/g, "").slice(0, 2);
+  if (!bucket) return NextResponse.json({ results: [] });
   try {
     const index = await databaseJson<Record<string, IndexRecord>>("buckets/" + bucket + ".json");
     const matches = Object.entries(index)
@@ -101,6 +104,7 @@ export async function GET(request: NextRequest) {
       headers: { "Cache-Control": "public, max-age=60, s-maxage=3600" }
     });
   } catch (error) {
-    console.error("GameDB catalog lookup failed:", error);\n    return NextResponse.json({ results: [], error: "Game search is temporarily unavailable. You can still add a game manually." }, { status: 503 });
+    console.error("GameDB catalog lookup failed:", error);
+    return NextResponse.json({ results: [], error: "Game search is temporarily unavailable. You can still add a game manually." }, { status: 503 });
   }
 }
