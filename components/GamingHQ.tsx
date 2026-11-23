@@ -967,8 +967,8 @@ export default function GamingHQ() {
         <div className="blank-state"><h2>Couldn't find that page.</h2><button className="primary" onClick={()=>go("/")}>Back to dashboard</button></div>}
       </main>
     </div>
-    {showPreferences&&<div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setShowPreferences(false);}}>
-      <div className="dialog preferences-dialog" role="dialog" aria-modal="true" aria-label="Playquill preferences">
+    <div className="modal-backdrop" hidden={!showPreferences} onMouseDown={e=>{if(e.target===e.currentTarget)setShowPreferences(false);}}>
+      <div className="dialog preferences-dialog" role="dialog" aria-modal={showPreferences} aria-label="Playquill preferences">
         <div className="dialog-head"><h2>Preferences</h2>
           <button className="icon-button" aria-label="Close preferences" onClick={()=>setShowPreferences(false)}><X size={20}/></button></div>
         <div className="dialog-fields">
@@ -982,7 +982,7 @@ export default function GamingHQ() {
               </button>)}
           </div>
           <div className="dialog-separator"/>
-          <div><div className="setting-caption">DATA & BACKUPS</div><p className="muted small">Your notes currently live in this browser, not in a cloud account. Export regularly and before switching preview URLs.</p></div>
+          <div><div className="setting-caption">DATA & BACKUPS</div><p className="muted small">Local autosaving remains active. Cloud backup is optional and only runs after you enable it. Export regularly and before switching preview URLs.</p></div>
           <button className="secondary" onClick={exportBackup}>Download JSON backup</button>
           <input ref={backupInputRef} type="file" accept=".json,application/json" className="hidden-backup-input"
             onChange={e=>{const file=e.currentTarget.files?.[0];if(file)void importBackup(file);}}/>
@@ -998,7 +998,7 @@ export default function GamingHQ() {
         </div>
         <div className="dialog-footer"><button className="primary" onClick={()=>setShowPreferences(false)}>Done</button></div>
       </div>
-    </div>}
+    </div>
     {modal&&<div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setModal(null)}}>
       <div className="dialog" role="dialog" aria-modal="true" aria-label={modal.type==="organize"?"Organize game":"Add new item"}>
         <div className="dialog-head"><h2>{modal.type==="catalog"?"Import games":modal.type==="game"?"Add a game":modal.type==="edit-game"?"Edit game":
