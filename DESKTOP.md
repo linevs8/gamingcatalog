@@ -1,42 +1,57 @@
 # Playquill for Windows
 
-Playquill is a personal game library and journal. The Windows edition is a **portable desktop application** powered by Electron and a bundled local Next.js server.
+Playquill is a personal game library and journal with a **real desktop app** built on Electron, bundling its own local Next.js server. The app opens in its own Windows window and can create desktop and Start Menu shortcuts.
 
-## Build a portable Windows EXE
+## Windows downloads
 
-On a Windows 10/11 x64 machine with Node.js 22 installed:
+The Windows CI workflow builds two artifacts from the same verified source:
+
+- **Playquill-Setup-0.2.0-x64.exe** — Windows installer (recommended), with Start Menu/Desktop shortcuts and normal removal through Windows Settings.
+- **Playquill-Portable-0.2.0-x64.exe** — standalone portable executable without an installer.
+
+Download the `Playquill-Windows-x64-verified` artifact from the successful **Build and verify Playquill for Windows** GitHub Actions run. Both files are unsigned developer builds. Windows SmartScreen may show a warning; inspect the official build source before choosing to proceed.
+
+### Build locally
+
+On Windows x64 with Node.js 22:
 
 ```powershell
 npm install
 npm run desktop:build
 ```
 
-The generated executable is written to `dist/Playquill-0.1.0-x64.exe`.
+The build writes both `.exe` files to `dist/`.
 
-GitHub Actions can also build it on the `feature/work-catchup-2026-11-20` branch using **Actions → Build Playquill Windows EXE**. Download the `Playquill-Windows-Portable` workflow artifact and extract the executable.
+### Startup validation
 
-The executable bundles the local Next.js server, Electron runtime, and app assets. **It does not require the Vercel website** to open your saved games, categories, and notes. Internet access is still required for searching online game databases and loading remote cover images.
+The first Playquill 0.1.0 portable binary sometimes failed to start with **Port 41771 may be occupied**. It launched itself as a second executable to start a Node.js server, which was not reliable for portable EXEs.
 
-## Your existing browser library
+The 0.2.0 launcher uses Electron's dedicated `utilityProcess.fork`, chooses a free local loopback port, starts the bundled Next.js server, and **requires valid HTML and CSS** before opening the main window. It records startup information in the user's Electron data folder as `startup.log`. If startup fails, the error dialog gives the log location. The Windows CI pipeline must successfully run the *actual packaged executable* in smoke-test mode before generating downloadable installers.
 
-The desktop application has a separate local storage profile from your web browser. To migrate existing data:
+Developer smoke test after `npm run build && npm run desktop:prepare`:
 
-1. Open your existing Playquill preview in the browser.
-2. Open Preferences and **export the JSON library backup**.
-3. Launch the Windows version.
-4. Import the JSON backup from Preferences.
+```powershell
+npx electron-builder --win --x64 --dir --publish never
+node scripts/smoke-windows.cjs dist/win-unpacked/Playquill.exe
+```
 
-Keep a backup before major changes. Playquill currently saves data locally, not to a cloud account.
+A passing build **does not** replace hands-on Windows testing of the notes editor, imports, drag-and-drop, sign-in and shutdown.
 
-## Implementation and limitations
+## Import your existing web collection
 
-- Launches one local Next.js server on `127.0.0.1:41771` and opens it in a dedicated Electron window.
-- Prevents a second copy of the desktop app from launching.
-- Refuses to load if another service already occupies that port.
-- Opens external web links in the default browser rather than inside a privileged Electron page.
-- Uses browser isolation: Node integration disabled and context isolation enabled.
-- This portable build is **unsigned** and Windows SmartScreen may ask for confirmation. Inspect the source and build logs before running.
-- The Windows build and packaging workflow must pass and the resulting executable must be tested on Windows before calling the desktop release stable.
-- No GitHub merge or Vercel production deployment is part of this Windows build.
+Desktop Playquill uses its own persistent Electron browser profile. Existing data in the Vercel preview stays on that hostname:
 
-See `electron/main.cjs`, `scripts/prepare-desktop.cjs`, `next.config.mjs`, and `electron-builder.json` for implementation details.
+1. Open Playquill in the browser and choose **Preferences → Download JSON backup**.
+2. Launch the Windows application and choose **Preferences → Import backup**.
+3. Select the JSON file and confirm replacement.
+
+Export a JSON backup before switching from browser to desktop or between versions. The desktop app still works for organizing games and local notes without an internet connection after assets are loaded, but external search, remote cover art and optional cloud sign-in need internet access.
+
+## Release guardrails
+
+- The bundled Next.js server listens **only on 127.0.0.1** on a dynamically chosen port; it does not rely on a running Vercel tab.
+- Only one Electron instance runs at a time.
+- Node.js integration is disabled in the renderer, context isolation is enabled, and untrusted external URLs open in the system browser.
+- No remote auto-updater or telemetry is included.
+- The cloud account uses public client credentials and private per-user data; Google OAuth and end-to-end cloud testing may require additional configuration and are **not** guaranteed by the desktop smoke test.
+- Do not merge, replace production, or mark a public release stable until Windows smoke tests and user acceptance pass.
