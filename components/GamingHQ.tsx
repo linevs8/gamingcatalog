@@ -10,6 +10,7 @@ import { SortableContext, rectSortingStrategy, verticalListSortingStrategy, sort
 import { SortableItem, DragItem, DropTarget } from "@/components/DragItems";
 import type { DragInfo, TargetInfo } from "@/components/DragItems";
 import { moveGamePlacement, reorderCategories, placeCategory } from "@/lib/organization";
+import { libraryPage, removeLibraryGames } from "@/lib/library";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Archive, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BookOpen, Check,
@@ -97,7 +98,7 @@ export default function GamingHQ() {
   const [openCategoryMenu, setOpenCategoryMenu] = useState(false);
   const [mobileMenu, setMobileMenu] = useState(false);
   const [libraryView, setLibraryView] = useState<"gallery" | "list">("gallery");
-  const [libraryPage, setLibraryPage] = useState(1);
+  const [libraryPageNumber, setLibraryPage] = useState(1);
   const LIBRARY_PAGE_SIZE = 80;
   useEffect(() => setLibraryPage(1), [query, libraryView]);
   const [pickerQuery, setPickerQuery] = useState("");
@@ -285,23 +286,9 @@ export default function GamingHQ() {
   const bulkDeleteGames = () => {
     const selected = new Set(librarySelected);
     if (!selected.size) return;
-    const confirmed = window.confirm("Permanently remove " + selected.size +
-      " selected games and ALL their notes and links? Export a full JSON backup first. This cannot be undone.");
-    if (!confirmed) return;
-    change(d => {
-      const notes = {...d.notes}, noteTitles = {...(d.noteTitles || {})},
-        notePages = {...(d.notePages || {})}, deletedNotePages = {...(d.deletedNotePages || {})},
-        noteRevisions = {...(d.noteRevisions || {})};
-      for (const id of selected) {
-        delete notes[id]; delete noteTitles[id]; delete notePages[id]; delete deletedNotePages[id];
-      }
-      for (const key of Object.keys(noteRevisions))
-        if ([...selected].some(id => key.startsWith(id + "/"))) delete noteRevisions[key];
-      return {...d, notes, noteTitles, notePages, deletedNotePages, noteRevisions,
-        games: d.games.filter(g => !selected.has(g.id)),
-        memberships: d.memberships.filter(m => !selected.has(m.gameId)),
-        links: d.links.filter(l => !selected.has(l.gameId))};
-    });
+    if (!window.confirm("Permanently remove " + selected.size +
+      " selected games and ALL their notes and links? Export a JSON backup first. This cannot be undone.")) return;
+    change(d => removeLibraryGames(d, selected));
     setLibrarySelected([]);
     setLibraryPage(1);
   };
@@ -656,11 +643,7 @@ export default function GamingHQ() {
   }
 
   function LibraryScreen() {
-    const filtered=data.games.filter(g=>(g.title+" "+g.subtitle).toLowerCase().includes(query.toLowerCase()))
-      .sort((a,b)=>a.title.localeCompare(b.title));
-    const totalPages = Math.max(1, Math.ceil(filtered.length / LIBRARY_PAGE_SIZE));
-    const safePage = Math.min(libraryPage, totalPages);
-    const visible = filtered.slice((safePage - 1) * LIBRARY_PAGE_SIZE, safePage * LIBRARY_PAGE_SIZE);
+    const { filtered, visible, safePage, totalPages } = libraryPage(data.games, query, libraryPageNumber, LIBRARY_PAGE_SIZE);
     const pageAllSelected = visible.length > 0 && visible.every(g => librarySelected.includes(g.id));
     const pagination = totalPages > 1 ? <nav className="library-pagination" aria-label="Library pages">
       <span>{(safePage-1)*LIBRARY_PAGE_SIZE+1}–{Math.min(safePage*LIBRARY_PAGE_SIZE,filtered.length)} of {filtered.length}</span>
