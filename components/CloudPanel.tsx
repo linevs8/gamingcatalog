@@ -137,9 +137,10 @@ export default function CloudPanel({ localData, onRestore }: Props) {
       <button className="secondary" disabled={busy || !email.includes("@")} onClick={()=>void requestEmailLink()}>
         Send sign-in link
       </button>
-      <button className="secondary" disabled={busy} onClick={()=>void signInWithGoogle()}>
+      {process.env.NEXT_PUBLIC_GOOGLE_AUTH_ENABLED === "true" && <button className="secondary"
+        disabled={busy} onClick={()=>void signInWithGoogle()}>
         Continue with Google
-      </button>
+      </button>}
     </> : <>
       <p className="muted small">Signed in as {user.email || "your account"}. Your local changes are never overwritten automatically.</p>
       <button className="secondary" disabled={busy} onClick={()=>void loadRemote()}>Check cloud library</button>
