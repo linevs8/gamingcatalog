@@ -106,6 +106,10 @@ if (!app.requestSingleInstanceLock()) {
 
   app.whenReady().then(async () => {
     try {
+      // Never display an unrelated service that happens to occupy our port.
+      if (await serverAvailable()) {
+        throw new Error("Port 41771 is in use. Close the conflicting service before starting Playquill.");
+      }
       beginServer();
       await waitForServer();
       createWindow();
