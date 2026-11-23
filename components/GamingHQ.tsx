@@ -95,6 +95,9 @@ export default function GamingHQ() {
   const [openCategoryMenu, setOpenCategoryMenu] = useState(false);
   const [mobileMenu, setMobileMenu] = useState(false);
   const [libraryView, setLibraryView] = useState<"gallery" | "list">("gallery");
+  const [libraryPage, setLibraryPage] = useState(1);
+  const LIBRARY_PAGE_SIZE = 80;
+  useEffect(() => setLibraryPage(1), [query, libraryView]);
   const [pickerQuery, setPickerQuery] = useState("");
   const [noteSelection,setNoteSelection] = useState<Record<string,string>>({});
   const [showHistory,setShowHistory]=useState<Record<string,boolean>>({});
@@ -276,6 +279,29 @@ export default function GamingHQ() {
       return {...d,memberships:members};
     });
     setLibrarySelected([]);
+  };
+  const bulkDeleteGames = () => {
+    const selected = new Set(librarySelected);
+    if (!selected.size) return;
+    const confirmed = window.confirm("Permanently remove " + selected.size +
+      " selected games and ALL their notes and links? Export a full JSON backup first. This cannot be undone.");
+    if (!confirmed) return;
+    change(d => {
+      const notes = {...d.notes}, noteTitles = {...(d.noteTitles || {})},
+        notePages = {...(d.notePages || {})}, deletedNotePages = {...(d.deletedNotePages || {})},
+        noteRevisions = {...(d.noteRevisions || {})};
+      for (const id of selected) {
+        delete notes[id]; delete noteTitles[id]; delete notePages[id]; delete deletedNotePages[id];
+      }
+      for (const key of Object.keys(noteRevisions))
+        if ([...selected].some(id => key.startsWith(id + "/"))) delete noteRevisions[key];
+      return {...d, notes, noteTitles, notePages, deletedNotePages, noteRevisions,
+        games: d.games.filter(g => !selected.has(g.id)),
+        memberships: d.memberships.filter(m => !selected.has(m.gameId)),
+        links: d.links.filter(l => !selected.has(l.gameId))};
+    });
+    setLibrarySelected([]);
+    setLibraryPage(1);
   };
   const addCategory = () => {
     if (!name.trim()) { setError("Name your category."); return; }
@@ -608,6 +634,16 @@ export default function GamingHQ() {
   function LibraryScreen() {
     const filtered=data.games.filter(g=>(g.title+" "+g.subtitle).toLowerCase().includes(query.toLowerCase()))
       .sort((a,b)=>a.title.localeCompare(b.title));
+    const totalPages = Math.max(1, Math.ceil(filtered.length / LIBRARY_PAGE_SIZE));
+    const safePage = Math.min(libraryPage, totalPages);
+    const visible = filtered.slice((safePage - 1) * LIBRARY_PAGE_SIZE, safePage * LIBRARY_PAGE_SIZE);
+    const pageAllSelected = visible.length > 0 && visible.every(g => librarySelected.includes(g.id));
+    const pagination = totalPages > 1 ? <nav className="library-pagination" aria-label="Library pages">
+      <span>{(safePage-1)*LIBRARY_PAGE_SIZE+1}–{Math.min(safePage*LIBRARY_PAGE_SIZE,filtered.length)} of {filtered.length}</span>
+      <button className="secondary small-button" disabled={safePage===1} onClick={()=>setLibraryPage(safePage-1)}>Previous</button>
+      <span>Page {safePage} of {totalPages}</span>
+      <button className="secondary small-button" disabled={safePage===totalPages} onClick={()=>setLibraryPage(safePage+1)}>Next</button>
+    </nav> : null;
     return <div className="screen">
       <div className="page-top"><div><div className="eyebrow">THE MASTER COLLECTION</div><h1>All Games<span className="dot">.</span></h1>
         <p className="subline">Every game lives here, even when it appears in several categories.</p></div>
@@ -622,6 +658,12 @@ export default function GamingHQ() {
           {libraryCollapsed?<ChevronRight size={15}/>:<ChevronDown size={15}/>}
           {libraryCollapsed?"Show":"Hide"} game library ({filtered.length})
         </button>
+        {!libraryCollapsed && visible.length>0 && <button className="secondary small-button"
+          onClick={()=>setLibrarySelected(previous=>pageAllSelected?
+            previous.filter(id=>!visible.some(g=>g.id===id)):
+            [...new Set([...previous,...visible.map(g=>g.id)])])}>
+          {pageAllSelected?"Deselect page":"Select page"}
+        </button>}
         {!!librarySelected.length&&<div className="bulk-controls">
           <span>{librarySelected.length} selected</span>
           <select aria-label="Bulk category" value={targetCategory} onChange={e=>setTargetCategory(e.target.value)}>
@@ -630,20 +672,21 @@ export default function GamingHQ() {
           <button className="secondary small-button" disabled={!targetCategory} onClick={()=>bulkAssign(targetCategory,true)}>Add to category</button>
           <button className="secondary small-button" disabled={!targetCategory} onClick={()=>bulkAssign(targetCategory,false)}>Remove from category</button>
           <button className="secondary small-button" onClick={()=>setLibrarySelected([])}>Clear selection</button>
+          <button className="secondary small-button bulk-delete" onClick={bulkDeleteGames}>Delete selected…</button>
         </div>}
       </div>
       {!data.games.length?<div className="blank-state compact"><div className="blank-symbol"><Library size={30}/></div>
         <h2>Your library starts here.</h2><p>Import console, PC and browser games with cover art, or add your own.</p>
         <button className="primary" onClick={()=>openModal("catalog")}><Plus size={17}/> Import games</button>
       </div>:libraryCollapsed?<p className="muted small">Library hidden. Expand to browse your games.</p>:!filtered.length?<div className="empty-search">No games match “{query}”.</div>:
-      <div className={libraryView==="gallery"?"games-grid":"games-list"}>
-        {filtered.map(g=><DragItem key={g.id} id={"library-game/"+g.id} data={{kind:"game",categoryId:"library",gameId:g.id}}>
+      <>{pagination}<div className={libraryView==="gallery"?"games-grid":"games-list"}>
+        {visible.map(g=><DragItem key={g.id} id={"library-game/"+g.id} data={{kind:"game",categoryId:"library",gameId:g.id}}>
           <div className="selectable-game"><label className="game-select" title={"Select "+g.title}>
             <input type="checkbox" aria-label={"Select "+g.title} checked={librarySelected.includes(g.id)}
               onChange={e=>setLibrarySelected(prev=>e.target.checked?[...prev,g.id]:prev.filter(id=>id!==g.id))}/>
           </label>{GameCard({game:g,list:libraryView==="list",organize:true})}</div>
         </DragItem>)}
-      </div>}
+      </div>{pagination}</>}
     </div>;
   }
 
