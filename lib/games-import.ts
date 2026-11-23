@@ -22,7 +22,7 @@ export function parseGamesImport(raw: unknown): GamesImport["games"] {
   });
 }
 
-function titleKey(title: string) { return title.normalize("NFKC").trim().replace(/\\s+/g, " ").toLocaleLowerCase(); }
+function titleKey(title: string) { return title.normalize("NFKC").trim().replace(/\s+/g, " ").toLocaleLowerCase(); }
 
 /** Import only games; preserve categories, shelves, notes, links and memberships. */
 export function mergeImportedGames(data: Data, entries: GamesImport["games"]): { data: Data; added: number; skipped: number } {
