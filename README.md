@@ -1,6 +1,6 @@
-# Gaming HQ 🎮
+# Playquill 🎮
 
-**Your games, your space.** A calm, midnight-blue home for the games you're playing, the games you might return to, and the little things you want to remember.
+**A personal journal for your games.** A warm, charcoal-toned home for the games you're playing, the games you might return to, and the little things you want to remember.
 
 Instead of a forced backlog or "daily rotation" system, **you** create the categories that make sense to you. The dashboard stays visual and clean; useful notes are only a click or two away.
 
@@ -81,3 +81,7 @@ The project uses Next.js (App Router), TypeScript, Lucide icons, and CSS design 
 Small, reviewable changes. Preserve what already works; don't introduce new user-facing complexity unless it actually makes playing games easier.
 
 Built together, one thoughtful iteration at a time. 💙
+
+## Windows desktop edition
+
+The source includes an Electron wrapper that runs Playquill locally and packages it as a portable Windows `.exe`. Read [DESKTOP.md](DESKTOP.md) for the Windows build instructions, GitHub Actions workflow, and how to import your existing browser library. The EXE release is separate from the web preview and is not considered stable until Windows testing passes.
