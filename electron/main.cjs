@@ -1,6 +1,6 @@
 // Playquill native Windows shell. Next.js runs in an Electron utility
 // process, not by launching the portable .exe again as in the original build.
-const { app, BrowserWindow, dialog, shell, utilityProcess } = require("electron");
+const { app, BrowserWindow, dialog, shell, utilityProcess, ipcMain } = require("electron");
 const fs = require("node:fs");
 const net = require("node:net");
 const http = require("node:http");
@@ -19,6 +19,54 @@ let starting = true;
 let shuttingDown = false;
 let homeURL = "";
 let logFile = "";
+
+// Unlike IndexedDB, this data lives under Electron's stable userData directory,
+// not the randomly assigned localhost origin used by the Next.js server.
+const DATA_LIMIT_BYTES = 30 * 1024 * 1024;
+function dataPath() { return path.join(app.getPath("userData"), "library.json"); }
+function validSender(event) {
+  try {
+    const frameUrl = new URL(event.senderFrame.url);
+    return frameUrl.origin === homeURL && frameUrl.hostname === "127.0.0.1";
+  } catch { return false; }
+}
+function loadNativeLibrary(event) {
+  if (!validSender(event)) throw new Error("Untrusted Playquill data request");
+  try {
+    const raw = fs.readFileSync(dataPath(), "utf8");
+    if (Buffer.byteLength(raw) > DATA_LIMIT_BYTES) throw new Error("Library file exceeds 30 MB");
+    const data = JSON.parse(raw);
+    if (!data || data.version !== 1 || !Array.isArray(data.games) || !Array.isArray(data.categories)) {
+      throw new Error("Invalid Playquill library file");
+    }
+    return data;
+  } catch (error) {
+    if (error.code === "ENOENT") return null;
+    log("Library load error: " + error);
+    throw error;
+  }
+}
+function saveNativeLibrary(event, data) {
+  if (!validSender(event)) throw new Error("Untrusted Playquill data request");
+  if (!data || data.version !== 1 || !Array.isArray(data.games) || !Array.isArray(data.categories)) {
+    throw new Error("Invalid Playquill library payload");
+  }
+  const serialized = JSON.stringify(data);
+  if (Buffer.byteLength(serialized) > DATA_LIMIT_BYTES) throw new Error("Library exceeds 30 MB");
+  const filename = dataPath();
+  const temp = filename + ".tmp";
+  fs.mkdirSync(path.dirname(filename), { recursive: true });
+  fs.writeFileSync(temp, serialized, "utf8");
+  fs.renameSync(temp, filename);
+  return true;
+}
+ipcMain.handle("playquill:load", event => loadNativeLibrary(event));
+ipcMain.handle("playquill:save", (event, data) => saveNativeLibrary(event, data));
+// Synchronous flush guards against closing within the autosave debounce window.
+ipcMain.on("playquill:save-sync", (event, data) => {
+  try { event.returnValue = saveNativeLibrary(event, data); }
+  catch (error) { log("Final save failed: " + error); event.returnValue = false; }
+});
 
 function log(message) {
   const line = "[" + new Date().toISOString() + "] " + String(message) + "\n";
@@ -149,6 +197,7 @@ function createWindow() {
     backgroundColor: "#0c0e11",
     autoHideMenuBar: true,
     webPreferences: {
+      preload: path.join(__dirname, "preload.cjs"),
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
