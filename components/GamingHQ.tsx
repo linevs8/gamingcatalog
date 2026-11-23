@@ -1006,7 +1006,7 @@ export default function GamingHQ() {
           <button className="secondary" onClick={()=>backupInputRef.current?.click()}>Import backup (replace this library)</button>
           {backupMessage&&<p role="status" className="muted small">{backupMessage}</p>}
           <div className="dialog-separator"/>
-          <CloudPanel localData={data} onRestore={async imported=>{
+          <CloudPanel localData={data} localSaveStatus={saveStatus} onRestore={async imported=>{
             await saveData(imported);
             setData(imported);
             setLibrarySelected([]);
