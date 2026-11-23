@@ -1,6 +1,6 @@
 {
   "name": "playquill",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -9,7 +9,7 @@
     "lint": "tsc --noEmit",
     "test": "node --experimental-strip-types --test tests/*.test.mjs",
     "desktop:prepare": "node scripts/prepare-desktop.cjs",
-    "desktop:build": "npm run build && npm run desktop:prepare && electron-builder --win portable --publish never"
+    "desktop:build": "npm run build && npm run desktop:prepare && electron-builder --win --x64 --publish never"
   },
   "dependencies": {
     "next": "^15.5.0",

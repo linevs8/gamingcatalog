@@ -16,16 +16,42 @@
       "filter": [
         "**/*"
       ]
+    },
+    {
+      "from": ".next/standalone/node_modules",
+      "to": "app-server/node_modules",
+      "filter": [
+        "**/*"
+      ]
     }
   ],
   "win": {
     "target": [
       {
+        "target": "nsis",
+        "arch": [
+          "x64"
+        ]
+      },
+      {
         "target": "portable",
-        "arch": ["x64"]
+        "arch": [
+          "x64"
+        ]
       }
     ],
-    "artifactName": "Playquill-${version}-${arch}.${ext}"
+    "artifactName": "Playquill-${version}-${arch}-${os}.${ext}"
   },
-  "publish": null
+  "publish": null,
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "Playquill",
+    "artifactName": "Playquill-Setup-${version}-${arch}.${ext}"
+  },
+  "portable": {
+    "artifactName": "Playquill-Portable-${version}-${arch}.${ext}"
+  }
 }

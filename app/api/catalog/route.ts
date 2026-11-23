@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { catalogBucket } from "@/lib/catalog-bucket";
 
 type IndexRecord = { name: string };
 type GameRecord = {
@@ -20,7 +21,7 @@ async function databaseJson<T>(path: string): Promise<T> {
   for (const base of BASES) {
     try {
       const response = await fetch(base + path, {
-        next: { revalidate: 60 * 60 * 24 },
+        cache: "no-store",
         signal: AbortSignal.timeout(8000)
       });
       if (response.ok) return (await response.json()) as T;
@@ -63,9 +64,10 @@ export async function GET(request: NextRequest) {
   const input = (request.nextUrl.searchParams.get("q") || "").slice(0, 100);
   const query = normalizeTitle(input);
   if (query.length < 2) return NextResponse.json({ results: [], message: "Type at least two characters." });
-  const initial = query.replace(/[^a-z0-9]/g, "").slice(0, 2);
-  if (!initial) return NextResponse.json({ results: [] });
-  const bucket = initial.length === 1 ? initial : initial.slice(0, 2);
+  // GameDB buckets use the original title’s first two characters, not the
+  // first two alphanumerics: "9 Kings" is indexed under "9", not "9k".
+  const bucket = catalogBucket(query);
+  if (!bucket) return NextResponse.json({ results: [] });
   try {
     const index = await databaseJson<Record<string, IndexRecord>>("buckets/" + bucket + ".json");
     const matches = Object.entries(index)
@@ -102,7 +104,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ results, source: "LizardByte GameDB" }, {
       headers: { "Cache-Control": "public, max-age=60, s-maxage=3600" }
     });
-  } catch {
+  } catch (error) {
+    console.error("GameDB catalog lookup failed:", error);
     return NextResponse.json({ results: [], error: "Game search is temporarily unavailable. You can still add a game manually." }, { status: 503 });
   }
 }
