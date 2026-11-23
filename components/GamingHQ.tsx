@@ -90,6 +90,8 @@ export default function GamingHQ() {
   const [catalogResults, setCatalogResults] = useState<CatalogGame[]>([]);
   const [catalogBusy, setCatalogBusy] = useState(false);
   const [catalogError, setCatalogError] = useState("");
+  const [coverProgress, setCoverProgress] = useState("");
+  const [coverBusy, setCoverBusy] = useState(false);
   const [libraryCollapsed, setLibraryCollapsed] = useState(false);
   const [librarySelected, setLibrarySelected] = useState<string[]>([]);
   const [showDeletedNotes,setShowDeletedNotes]=useState(false);
@@ -503,6 +505,41 @@ export default function GamingHQ() {
     window.setTimeout(()=>URL.revokeObjectURL(url),2000);
     setBackupMessage("Backup downloaded. Keep it somewhere safe.");
   };
+  const fillMissingCovers = async (games: Game[]) => {
+    if (coverBusy) return;
+    setCoverBusy(true);
+    let filled = 0;
+    let checked = 0;
+    const pending = games.filter(g => !g.coverUrl).slice(0, 200);
+    const normalize = (value: string) => value.normalize("NFKD")
+      .replace(/[\\u0300-\\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    try {
+      for (const game of pending) {
+        setCoverProgress("Finding covers: " + checked + "/" + pending.length + " · " + filled + " found");
+        try {
+          const q = encodeURIComponent(game.title);
+          const responses = await Promise.allSettled([
+            fetch("/api/igdb/search?q=" + q, { cache: "no-store" }).then(async r =>
+              r.ok ? ((await r.json()).games || []).map((v: {providerId:number,title:string,coverUrl?:string,subtitle?:string}) =>
+                ({ title:v.title, coverUrl:v.coverUrl || "", subtitle:v.subtitle || "" })) : []),
+            fetch("/api/catalog?q=" + q, { cache: "no-store" }).then(async r =>
+              r.ok ? ((await r.json()).results || []) as {title:string;coverUrl:string;subtitle:string}[] : [])
+          ]);
+          const results = responses.flatMap(result => result.status === "fulfilled" && Array.isArray(result.value) ? result.value : []);
+          const cover = results.find(item => item.coverUrl && normalize(item.title) === normalize(game.title));
+          if (cover) {
+            filled++;
+            setData(prev => ({
+              ...prev, games: prev.games.map(g => g.id === game.id && !g.coverUrl
+                ? { ...g, coverUrl: cover.coverUrl, subtitle: g.subtitle || cover.subtitle || "" } : g)
+            }));
+          }
+        } catch { /* Continue through individual lookup failures. */ }
+        checked++;
+      }
+      setCoverProgress("Cover lookup complete: " + filled + " found, " + (checked - filled) + " unchanged.");
+    } finally { setCoverBusy(false); }
+  };
   const importGamesOnly = async (file: File) => {
     try {
       if (file.size > 5_000_000) throw new Error("Games file is too large.");
@@ -519,6 +556,8 @@ export default function GamingHQ() {
         " (" + result.skipped + " duplicates skipped). Your categories and notes were not changed.");
       setModal(null);
       go("/library");
+      // Enrich only the newly added titles. Category memberships remain untouched.
+      void fillMissingCovers(result.data.games.slice(-result.added));
     } catch (error) {
       setBackupMessage(error instanceof Error ? error.message : "Couldn't read that games file.");
       setShowPreferences(true);
@@ -688,7 +727,7 @@ export default function GamingHQ() {
       <div className="page-top"><div><div className="eyebrow">THE MASTER COLLECTION</div><h1>All Games<span className="dot">.</span></h1>
         <p className="subline">Every game lives here, even when it appears in several categories.</p></div>
         <button className="primary" onClick={()=>openModal("catalog")}><Plus size={17}/> Import games</button></div>
-      <div className="library-import-actions"><button className="secondary small-button" onClick={()=>gamesInputRef.current?.click()}>Import games from JSON</button>{backupMessage&&<span role="status" className="muted small">{backupMessage}</span>}</div>
+      <div className="library-import-actions"><button className="secondary small-button" onClick={()=>gamesInputRef.current?.click()}>Import games from JSON</button><button className="secondary small-button" disabled={coverBusy || !data.games.some(g=>!g.coverUrl)} onClick={()=>void fillMissingCovers(data.games)}> {coverBusy?"Finding covers…":"Find missing covers"} </button>{coverProgress&&<span role="status" className="muted small">{coverProgress}</span>}{backupMessage&&<span role="status" className="muted small">{backupMessage}</span>}</div>
       <div className="library-toolbar">
         <label className="search"><Search size={18}/><input aria-label="Search your games" placeholder="Search your library…" value={query} onChange={e=>setQuery(e.target.value)}/></label>
         <div className="segment"><button className={libraryView==="gallery"?"selected":""} onClick={()=>setLibraryView("gallery")} title="Gallery view"><LayoutDashboard size={17}/></button>
