@@ -1,15 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import type { Data } from "@/lib/data";
 import { cloudClient } from "@/lib/cloud";
 import { validateImport } from "@/lib/data";
 
 type Remote = { data: unknown; revision: number; updated_at: string };
-type Props = { localData: Data; onRestore: (value: Data) => Promise<void> };
+type Props = { localData: Data; localSaveStatus: "saving" | "saved" | "error"; onRestore: (value: Data) => Promise<void> };
 
-export default function CloudPanel({ localData, onRestore }: Props) {
+export default function CloudPanel({ localData, localSaveStatus, onRestore }: Props) {
   const client = useMemo(() => cloudClient(), []);
   const [user, setUser] = useState<User | null>(null);
   const [email, setEmail] = useState("");
@@ -17,6 +17,9 @@ export default function CloudPanel({ localData, onRestore }: Props) {
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
+  const [autoSync, setAutoSync] = useState(false);
+  const lastSynced = useRef("");
+  const signature = useMemo(() => JSON.stringify(localData), [localData]);
 
   useEffect(() => {
     if (!client) return;
@@ -31,6 +34,8 @@ export default function CloudPanel({ localData, onRestore }: Props) {
       if (event === "SIGNED_OUT" || event === "SIGNED_IN") {
         setRemote(null);
         setLoaded(false);
+        setAutoSync(false);
+        lastSynced.current = "";
       }
     });
     return () => { mounted = false; listener.subscription.unsubscribe(); };
@@ -45,6 +50,8 @@ export default function CloudPanel({ localData, onRestore }: Props) {
       if (error) throw error;
       setRemote(data as Remote | null);
       setLoaded(true);
+      setAutoSync(false);
+      lastSynced.current = "";
       setStatus(data ? "Cloud library found. Choose whether to upload or restore."
         : "No cloud library yet. Upload your current library when you're ready.");
     } catch (err) {
@@ -82,7 +89,7 @@ export default function CloudPanel({ localData, onRestore }: Props) {
   };
 
   const upload = async () => {
-    if (!client || !user || !loaded) return;
+    if (!client || !user || !loaded || localSaveStatus !== "saved") return;
     const action = remote
       ? "REPLACE your saved CLOUD library with this device's current library? Other devices will need to restore the new copy. Export a JSON backup first."
       : "Create a private CLOUD copy of the library currently on this device? Export a JSON backup first.";
@@ -106,6 +113,7 @@ export default function CloudPanel({ localData, onRestore }: Props) {
         if (error) throw error;
         setRemote(data as Remote);
       }
+      lastSynced.current = signature;
       setStatus("Cloud library uploaded successfully. This device's local library is unchanged.");
     } catch (err) {
       setStatus("Upload failed: " + (err instanceof Error ? err.message : "Unknown error"));
@@ -119,6 +127,7 @@ export default function CloudPanel({ localData, onRestore }: Props) {
     try {
       const validated = validateImport(remote.data);
       await onRestore(validated);
+      lastSynced.current = JSON.stringify(validated);
       setStatus("Cloud library restored to this device.");
     } catch (err) {
       setStatus("Restore failed: " + (err instanceof Error ? err.message : "Unknown error"));
