@@ -26,11 +26,14 @@ export default function CloudPanel({ localData, onRestore }: Props) {
       setUser(error ? null : data.user);
     });
     const { data: listener } = client.auth.onAuthStateChange((_event, session) => {
-      if (mounted) {
-        setUser(session?.user ?? null);
-        setRemote(null);
-        setLoaded(false);
-      }
+      if (!mounted) return;
+      setUser(previous => {
+        if (previous?.id !== (session?.user?.id ?? null)) {
+          setRemote(null);
+          setLoaded(false);
+        }
+        return session?.user ?? null;
+      });
     });
     return () => { mounted = false; listener.subscription.unsubscribe(); };
   }, [client]);
