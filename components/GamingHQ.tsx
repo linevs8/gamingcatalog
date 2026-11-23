@@ -688,7 +688,7 @@ export default function GamingHQ() {
       <div className="page-top"><div><div className="eyebrow">THE MASTER COLLECTION</div><h1>All Games<span className="dot">.</span></h1>
         <p className="subline">Every game lives here, even when it appears in several categories.</p></div>
         <button className="primary" onClick={()=>openModal("catalog")}><Plus size={17}/> Import games</button></div>
-      <div className="library-import-actions"><button className="secondary small-button" onClick={()=>gamesInputRef.current?.click()}>Import games from JSON</button></div>
+      <div className="library-import-actions"><button className="secondary small-button" onClick={()=>gamesInputRef.current?.click()}>Import games from JSON</button>{backupMessage&&<span role="status" className="muted small">{backupMessage}</span>}</div>
       <div className="library-toolbar">
         <label className="search"><Search size={18}/><input aria-label="Search your games" placeholder="Search your library…" value={query} onChange={e=>setQuery(e.target.value)}/></label>
         <div className="segment"><button className={libraryView==="gallery"?"selected":""} onClick={()=>setLibraryView("gallery")} title="Gallery view"><LayoutDashboard size={17}/></button>
