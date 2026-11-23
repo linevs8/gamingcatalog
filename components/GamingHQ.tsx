@@ -3,12 +3,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import RichNotes from "@/components/RichNotes";
+import CloudPanel from "@/components/CloudPanel";
 import { DndContext, PointerSensor, KeyboardSensor, closestCenter, useSensor, useSensors } from "@dnd-kit/core";
 import type { DragStartEvent, DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, rectSortingStrategy, verticalListSortingStrategy, sortableKeyboardCoordinates } from "@dnd-kit/sortable";
 import { SortableItem, DragItem, DropTarget } from "@/components/DragItems";
 import type { DragInfo, TargetInfo } from "@/components/DragItems";
 import { moveGamePlacement, reorderCategories, placeCategory } from "@/lib/organization";
+import { libraryPage, removeLibraryGames } from "@/lib/library";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Archive, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, BookOpen, Check,
@@ -70,6 +72,7 @@ export default function GamingHQ() {
   const [ready, setReady] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"saving" | "saved" | "error">("saved");
   const latestRevision = useRef(0);
+  const lastAutoNoteSnapshot = useRef<Record<string, number>>({});
   const [modal, setModal] = useState<Modal>(null);
   const [name, setName] = useState("");
   const [subtitle, setSubtitle] = useState("");
@@ -95,6 +98,9 @@ export default function GamingHQ() {
   const [openCategoryMenu, setOpenCategoryMenu] = useState(false);
   const [mobileMenu, setMobileMenu] = useState(false);
   const [libraryView, setLibraryView] = useState<"gallery" | "list">("gallery");
+  const [libraryPageNumber, setLibraryPage] = useState(1);
+  const LIBRARY_PAGE_SIZE = 80;
+  useEffect(() => setLibraryPage(1), [query, libraryView]);
   const [pickerQuery, setPickerQuery] = useState("");
   const [noteSelection,setNoteSelection] = useState<Record<string,string>>({});
   const [showHistory,setShowHistory]=useState<Record<string,boolean>>({});
@@ -277,6 +283,15 @@ export default function GamingHQ() {
     });
     setLibrarySelected([]);
   };
+  const bulkDeleteGames = () => {
+    const selected = new Set(librarySelected);
+    if (!selected.size) return;
+    if (!window.confirm("Permanently remove " + selected.size +
+      " selected games and ALL their notes and links? Export a JSON backup first. This cannot be undone.")) return;
+    change(d => removeLibraryGames(d, selected));
+    setLibrarySelected([]);
+    setLibraryPage(1);
+  };
   const addCategory = () => {
     if (!name.trim()) { setError("Name your category."); return; }
     const location = targetCategory || "dashboard";
@@ -370,6 +385,28 @@ export default function GamingHQ() {
       memberships:d.memberships.filter(m=>m.categoryId!==id) }));
     setOpenCategoryMenu(false);
     go("/");
+  };
+  const updateNoteContent=(gameId:string,pageId:string,content:string)=>{
+    const key=gameId+"/"+pageId;
+    const now=Date.now();
+    change(d=>{
+      const previous=pageId==="current"?(d.notes[gameId]||""):
+        ((d.notePages?.[gameId]||[]).find(p=>p.id===pageId)?.content||"");
+      if(previous===content)return d;
+      const prior=d.noteRevisions?.[key]||[];
+      const due=previous.length>0 && (!lastAutoNoteSnapshot.current[key] ||
+        now-lastAutoNoteSnapshot.current[key]>90_000);
+      const nextRevisions=due && prior[0]?.content!==previous?
+        {...(d.noteRevisions||{}),
+          [key]:[{id:makeId(),content:previous,createdAt:now},...prior].slice(0,20)}:
+        d.noteRevisions;
+      if(due)lastAutoNoteSnapshot.current[key]=now;
+      if(pageId==="current")return {...d,notes:{...d.notes,[gameId]:content},
+        noteRevisions:nextRevisions};
+      return {...d,notePages:{...(d.notePages||{}),
+        [gameId]:(d.notePages?.[gameId]||[]).map(p=>p.id===pageId?{...p,content}:p)},
+        noteRevisions:nextRevisions};
+    });
   };
   const snapshotNote=(gameId:string,pageId:string)=>{
     change(d=>{
@@ -606,8 +643,14 @@ export default function GamingHQ() {
   }
 
   function LibraryScreen() {
-    const filtered=data.games.filter(g=>(g.title+" "+g.subtitle).toLowerCase().includes(query.toLowerCase()))
-      .sort((a,b)=>a.title.localeCompare(b.title));
+    const { filtered, visible, safePage, totalPages } = libraryPage(data.games, query, libraryPageNumber, LIBRARY_PAGE_SIZE);
+    const pageAllSelected = visible.length > 0 && visible.every(g => librarySelected.includes(g.id));
+    const pagination = totalPages > 1 ? <nav className="library-pagination" aria-label="Library pages">
+      <span>{(safePage-1)*LIBRARY_PAGE_SIZE+1}–{Math.min(safePage*LIBRARY_PAGE_SIZE,filtered.length)} of {filtered.length}</span>
+      <button className="secondary small-button" disabled={safePage===1} onClick={()=>setLibraryPage(safePage-1)}>Previous</button>
+      <span>Page {safePage} of {totalPages}</span>
+      <button className="secondary small-button" disabled={safePage===totalPages} onClick={()=>setLibraryPage(safePage+1)}>Next</button>
+    </nav> : null;
     return <div className="screen">
       <div className="page-top"><div><div className="eyebrow">THE MASTER COLLECTION</div><h1>All Games<span className="dot">.</span></h1>
         <p className="subline">Every game lives here, even when it appears in several categories.</p></div>
@@ -622,6 +665,12 @@ export default function GamingHQ() {
           {libraryCollapsed?<ChevronRight size={15}/>:<ChevronDown size={15}/>}
           {libraryCollapsed?"Show":"Hide"} game library ({filtered.length})
         </button>
+        {!libraryCollapsed && visible.length>0 && <button className="secondary small-button"
+          onClick={()=>setLibrarySelected(previous=>pageAllSelected?
+            previous.filter(id=>!visible.some(g=>g.id===id)):
+            [...new Set([...previous,...visible.map(g=>g.id)])])}>
+          {pageAllSelected?"Deselect page":"Select page"}
+        </button>}
         {!!librarySelected.length&&<div className="bulk-controls">
           <span>{librarySelected.length} selected</span>
           <select aria-label="Bulk category" value={targetCategory} onChange={e=>setTargetCategory(e.target.value)}>
@@ -630,20 +679,21 @@ export default function GamingHQ() {
           <button className="secondary small-button" disabled={!targetCategory} onClick={()=>bulkAssign(targetCategory,true)}>Add to category</button>
           <button className="secondary small-button" disabled={!targetCategory} onClick={()=>bulkAssign(targetCategory,false)}>Remove from category</button>
           <button className="secondary small-button" onClick={()=>setLibrarySelected([])}>Clear selection</button>
+          <button className="secondary small-button bulk-delete" onClick={bulkDeleteGames}>Delete selected…</button>
         </div>}
       </div>
       {!data.games.length?<div className="blank-state compact"><div className="blank-symbol"><Library size={30}/></div>
         <h2>Your library starts here.</h2><p>Import console, PC and browser games with cover art, or add your own.</p>
         <button className="primary" onClick={()=>openModal("catalog")}><Plus size={17}/> Import games</button>
       </div>:libraryCollapsed?<p className="muted small">Library hidden. Expand to browse your games.</p>:!filtered.length?<div className="empty-search">No games match “{query}”.</div>:
-      <div className={libraryView==="gallery"?"games-grid":"games-list"}>
-        {filtered.map(g=><DragItem key={g.id} id={"library-game/"+g.id} data={{kind:"game",categoryId:"library",gameId:g.id}}>
+      <>{pagination}<div className={libraryView==="gallery"?"games-grid":"games-list"}>
+        {visible.map(g=><DragItem key={g.id} id={"library-game/"+g.id} data={{kind:"game",categoryId:"library",gameId:g.id}}>
           <div className="selectable-game"><label className="game-select" title={"Select "+g.title}>
             <input type="checkbox" aria-label={"Select "+g.title} checked={librarySelected.includes(g.id)}
               onChange={e=>setLibrarySelected(prev=>e.target.checked?[...prev,g.id]:prev.filter(id=>id!==g.id))}/>
           </label>{GameCard({game:g,list:libraryView==="list",organize:true})}</div>
         </DragItem>)}
-      </div>}
+      </div>{pagination}</>}
     </div>;
   }
 
@@ -792,11 +842,10 @@ export default function GamingHQ() {
         </div>
         {(!noteSelection[game.id]||noteSelection[game.id]==="current")?
           <RichNotes key={game.id+":current:"+(noteRefresh[game.id+"/current"]||0)} note={data.notes[game.id]||""}
-            onChange={html=>change(d=>({...d,notes:{...d.notes,[game.id]:html}}))}/>:
+            onChange={html=>updateNoteContent(game.id,"current",html)}/>:
           <RichNotes key={game.id+":"+noteSelection[game.id]+":"+(noteRefresh[historyKey]||0)}
             note={data.notePages?.[game.id]?.find(p=>p.id===noteSelection[game.id])?.content||""}
-            onChange={html=>change(d=>({...d,notePages:{...(d.notePages||{}),
-              [game.id]:(d.notePages?.[game.id]||[]).map(p=>p.id===noteSelection[game.id]?{...p,content:html}:p)}}))}/>
+            onChange={html=>updateNoteContent(game.id,pageId,html)}/>
         }
         <div className="note-history-bar">
           <button className="history-action" type="button" onClick={()=>setShowDeletedNotes(v=>!v)}>
@@ -918,8 +967,8 @@ export default function GamingHQ() {
         <div className="blank-state"><h2>Couldn't find that page.</h2><button className="primary" onClick={()=>go("/")}>Back to dashboard</button></div>}
       </main>
     </div>
-    {showPreferences&&<div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setShowPreferences(false);}}>
-      <div className="dialog preferences-dialog" role="dialog" aria-modal="true" aria-label="Playquill preferences">
+    <div className="modal-backdrop" hidden={!showPreferences} onMouseDown={e=>{if(e.target===e.currentTarget)setShowPreferences(false);}}>
+      <div className="dialog preferences-dialog" role="dialog" aria-modal={showPreferences} aria-label="Playquill preferences">
         <div className="dialog-head"><h2>Preferences</h2>
           <button className="icon-button" aria-label="Close preferences" onClick={()=>setShowPreferences(false)}><X size={20}/></button></div>
         <div className="dialog-fields">
@@ -933,16 +982,23 @@ export default function GamingHQ() {
               </button>)}
           </div>
           <div className="dialog-separator"/>
-          <div><div className="setting-caption">DATA & BACKUPS</div><p className="muted small">Your notes currently live in this browser, not in a cloud account. Export regularly and before switching preview URLs.</p></div>
+          <div><div className="setting-caption">DATA & BACKUPS</div><p className="muted small">Local autosaving remains active. Cloud backup is optional and only runs after you enable it. Export regularly and before switching preview URLs.</p></div>
           <button className="secondary" onClick={exportBackup}>Download JSON backup</button>
           <input ref={backupInputRef} type="file" accept=".json,application/json" className="hidden-backup-input"
             onChange={e=>{const file=e.currentTarget.files?.[0];if(file)void importBackup(file);}}/>
           <button className="secondary" onClick={()=>backupInputRef.current?.click()}>Import backup (replace this library)</button>
           {backupMessage&&<p role="status" className="muted small">{backupMessage}</p>}
+          <div className="dialog-separator"/>
+          <CloudPanel localData={data} localSaveStatus={saveStatus} onRestore={async imported=>{
+            await saveData(imported);
+            setData(imported);
+            setLibrarySelected([]);
+            setBackupMessage("Cloud library restored locally. Export a new backup if you wish.");
+          }}/>
         </div>
         <div className="dialog-footer"><button className="primary" onClick={()=>setShowPreferences(false)}>Done</button></div>
       </div>
-    </div>}
+    </div>
     {modal&&<div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setModal(null)}}>
       <div className="dialog" role="dialog" aria-modal="true" aria-label={modal.type==="organize"?"Organize game":"Add new item"}>
         <div className="dialog-head"><h2>{modal.type==="catalog"?"Import games":modal.type==="game"?"Add a game":modal.type==="edit-game"?"Edit game":
