@@ -1,0 +1,42 @@
+name: Build Playquill Windows EXE
+
+on:
+  push:
+    branches:
+      - feature/work-catchup-2026-11-20
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows:
+    name: Package Playquill Windows x64
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: package.json
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Check Electron script
+        run: node --check electron/main.cjs
+      - name: Check packaging script
+        run: node --check scripts/prepare-desktop.cjs
+      - name: Type-check application
+        run: npm run lint
+      - name: Test data invariants
+        run: npm run test
+      - name: Build portable Windows EXE
+        run: npm run desktop:build
+      - name: Upload Windows executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: Playquill-Windows-Portable
+          path: dist/*.exe
+          if-no-files-found: error
+          retention-days: 14
