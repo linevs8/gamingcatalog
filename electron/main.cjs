@@ -60,6 +60,12 @@ function saveNativeLibrary(event, data) {
   fs.renameSync(temp, filename);
   return true;
 }
+ipcMain.on("playquill:focus-window", event => {
+  if (!validSender(event) || !mainWindow || mainWindow.isDestroyed()) return;
+  if (event.sender !== mainWindow.webContents) return;
+  // Recover renderer input focus following native dialogs and window switches.
+  if (mainWindow.isFocused() && !mainWindow.webContents.isFocused()) mainWindow.webContents.focus();
+});
 ipcMain.handle("playquill:load", event => loadNativeLibrary(event));
 ipcMain.handle("playquill:save", (event, data) => saveNativeLibrary(event, data));
 // Synchronous flush guards against closing within the autosave debounce window.
@@ -198,6 +204,7 @@ function createWindow() {
     center: true,
     backgroundColor: "#0c0e11",
     autoHideMenuBar: true,
+    titleBarStyle: "default",
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       nodeIntegration: false,
@@ -206,6 +213,7 @@ function createWindow() {
       webSecurity: true,
     },
   });
+  mainWindow.removeMenu();
   let shown = false;
   const show = () => {
     if (shown || !mainWindow || mainWindow.isDestroyed()) return;
@@ -226,6 +234,9 @@ function createWindow() {
       event.preventDefault();
       if (/^https?:\/\//i.test(url)) void shell.openExternal(url);
     }
+  });
+  mainWindow.on("focus", () => {
+    if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isFocused()) mainWindow.webContents.focus();
   });
   mainWindow.on("closed", () => { mainWindow = null; });
   void mainWindow.loadURL(homeURL + "/");
