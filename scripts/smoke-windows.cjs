@@ -51,7 +51,7 @@ proc.once("exit", (code, signal) => {
     }
   }
   if (code !== 0 || signal || !result.ok || result.html !== 200 ||
-      result.css !== 200 || result.packaged !== true || !result.searchFocus || !result.manualAdd || !result.nativeSave || !result.reloadRestore || !result.localBackup) {
+      result.css !== 200 || result.packaged !== true || !result.searchFocus || !result.manualAdd || !result.nativeSave || !result.reloadRestore || !result.localBackup || !result.themeConsistency) {
     process.exitCode = 1;
   }
   if (result.smokeProfile && path.dirname(result.smokeProfile) === os.tmpdir() && path.basename(result.smokeProfile).startsWith('playquill-ui-test-')) {
