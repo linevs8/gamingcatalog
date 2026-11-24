@@ -153,3 +153,33 @@ html body .app-shell[class] .category-screen .game-tile:hover .cover {
 
 .desktop-update-progress{display:flex;flex-direction:column;gap:7px;font-size:12px;color:var(--muted)}
 .desktop-update-progress progress{width:100%;height:5px;accent-color:var(--accent)}
+
+/* Dashboard density affects category previews only, not the library. */
+html body .app-shell .dashboard-actions { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+html body .app-shell .dashboard-size-picker { min-height:36px; border:1px solid var(--border); border-radius:7px; background:var(--panel); color:var(--text); font:600 13px/1.2 "Segoe UI",system-ui,sans-serif; padding:7px 10px; cursor:pointer; }
+html body .app-shell .dashboard-size-picker:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+html body .app-shell[class] .dashboard-screen[data-density="medium"] .category-grid {
+  grid-template-columns:repeat(auto-fill,minmax(min(100%,260px),300px)); gap:16px; justify-content:start;
+}
+html body .app-shell[class] .dashboard-screen[data-density="compact"] .category-grid {
+  grid-template-columns:repeat(auto-fill,minmax(min(100%,190px),220px)); gap:12px; justify-content:start;
+}
+html body .app-shell[class] .dashboard-screen:not([data-density="large"]) .category-preview {padding:14px; border-radius:12px;}
+html body .app-shell[class] .dashboard-screen[data-density="compact"] .category-preview {padding:10px; border-radius:9px;}
+html body .app-shell[class] .dashboard-screen:not([data-density="large"]) .category-head {gap:9px; min-height:36px; margin-bottom:10px;}
+html body .app-shell[class] .dashboard-screen:not([data-density="large"]) .category-head > div {min-width:0;}
+html body .app-shell[class] .dashboard-screen:not([data-density="large"]) .category-head h2 {font-size:17px; margin-bottom:3px;}
+html body .app-shell[class] .dashboard-screen[data-density="compact"] .category-head h2 {font-size:14px;}
+html body .app-shell[class] .dashboard-screen:not([data-density="large"]) .category-head .small {font-size:11px;}
+html body .app-shell[class] .dashboard-screen:not([data-density="large"]) .category-icon {width:30px; height:30px; min-width:30px;}
+html body .app-shell[class] .dashboard-screen:not([data-density="large"]) .category-icon svg {width:19px;height:19px;}
+html body .app-shell[class] .dashboard-screen[data-density="compact"] .category-icon {width:24px;height:24px;min-width:24px;}
+html body .app-shell[class] .dashboard-screen[data-density="compact"] .category-icon svg {width:16px;height:16px;}
+html body .app-shell[class] .dashboard-screen:not([data-density="large"]) .category-arrow {width:15px;height:15px; flex-shrink:0;}
+html body .app-shell[class] .dashboard-screen:not([data-density="large"]) .category-preview:before {width:9px;height:13px;left:12px;}
+html body .app-shell[class] .dashboard-screen:not([data-density="large"]) .preview-covers {gap:6px;}
+html body .app-shell[class] .dashboard-screen:not([data-density="large"]) .preview-covers .cover {aspect-ratio:3/4; border-radius:5px;}
+@media(max-width:760px) {
+  html body .app-shell[class] .dashboard-screen[data-density="compact"] .category-grid {grid-template-columns:repeat(auto-fill,minmax(min(100%,148px),1fr));}
+  html body .app-shell[class] .dashboard-screen[data-density="medium"] .category-grid {grid-template-columns:repeat(auto-fill,minmax(min(100%,220px),1fr));}
+}
