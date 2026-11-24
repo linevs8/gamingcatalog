@@ -1069,7 +1069,7 @@ export default function GamingHQ() {
   return <DndContext sensors={sensors} collisionDetection={closestCenter}
       onDragStart={handleDragStart} onDragEnd={handleDragEnd}
       onDragCancel={()=>setDragging(null)}>
-    <div className={"app-shell theme-"+(data.theme||"midnight")}>
+    <div className={"app-shell theme-unified theme-"+(data.theme||"midnight")}>
     <aside inert={!!modal||showPreferences} className={"sidebar "+(!sidebarOpen?"collapsed ":"")+(mobileMenu?"mobile-open":"")}>
       <div className="brand">
         {sidebarOpen ? (
@@ -1156,8 +1156,8 @@ export default function GamingHQ() {
           <div className="theme-grid">
             {([["midnight","Midnight Blue"],["obsidian","Obsidian"],["violet","Dusk Violet"],["teal","Deep Teal"]] as [ThemeName,string][]).map(([id,label])=>
               <button className={"theme-choice theme-preview-"+id+((data.theme||"midnight")===id?" chosen":"")}
-                key={id} onClick={()=>change(d=>({...d,theme:id}))}>
-                <span className="theme-preview-bar"/><strong>{label}</strong>
+                key={id} aria-pressed={(data.theme||"midnight")===id} onClick={()=>change(d=>({...d,theme:id}))}>
+                <span className="theme-preview-bar" aria-hidden="true"><i/><i/><i/></span><strong>{label}</strong>
                 {(data.theme||"midnight")===id&&<Check size={15}/>}
               </button>)}
           </div>
@@ -1182,7 +1182,7 @@ export default function GamingHQ() {
           {ready&&typeof window!=="undefined"&&window.playquillDesktop?.checkUpdate&&<>
             <div className="dialog-separator"/>
             <div className="desktop-update-row">
-              <span className="muted small">Playquill {updateInfo?.current||"0.4.1"}</span>
+              <span className="muted small">Playquill {updateInfo?.current||"0.4.2"}</span>
               <button className="secondary small-button" disabled={updateBusy||updateStage!=="idle"} onClick={()=>void checkUpdate()}>{updateBusy?"Checking…":"Check for updates"}</button>
             </div>
             {updateStage==="downloading"?<div className="desktop-update-progress" role="status"><span>Downloading update · {updatePercent}%</span><progress aria-label="Update download" max={100} value={updatePercent}/></div>:

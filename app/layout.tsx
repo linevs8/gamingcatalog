@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./playquill-bundle.css";
 import "./quality.css";
+import "./themes.css";
 import GamingHQ from "@/components/GamingHQ";
 
 export const metadata: Metadata = {
