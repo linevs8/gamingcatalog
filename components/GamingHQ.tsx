@@ -589,6 +589,7 @@ export default function GamingHQ() {
       setBackupMessage("Imported " + result.added + " game" + (result.added === 1 ? "" : "s") +
         " (" + result.skipped + " duplicates skipped). Your categories and notes were not changed.");
       setModal(null);
+      setShowPreferences(false);
       go("/library");
       // Enrich only the newly added titles. Category memberships remain untouched.
       void fillMissingCovers(result.data.games.slice(-result.added));
@@ -1034,11 +1035,11 @@ export default function GamingHQ() {
         ) : (
           <>
             <button type="button" className={"nav-item nav-expand "+(section==="dashboard"?"nav-active":"")}
-              aria-label="Expand sidebar for Dashboard" title="Expand sidebar · Dashboard" onClick={expandSidebar}><LayoutDashboard size={18}/></button>
+              aria-label="Dashboard" title="Dashboard" onClick={()=>go("/")}><LayoutDashboard size={18}/></button>
             <button type="button" className={"nav-item nav-expand "+(section==="library"?"nav-active":"")}
-              aria-label="Expand sidebar for All Games" title="Expand sidebar · All Games" onClick={expandSidebar}><Library size={18}/></button>
+              aria-label="All Games" title="All Games" onClick={()=>go("/library")}><Library size={18}/></button>
             <button type="button" className={"nav-item nav-expand shelf-nav "+(section==="shelves"?"nav-active":"")}
-              aria-label="Expand sidebar for Shelves" title="Expand sidebar · Shelves" onClick={expandSidebar}><Archive size={18}/></button>
+              aria-label="Shelves" title="Shelves" onClick={()=>go("/shelves")}><Archive size={18}/></button>
           </>
         )}
         {sidebarOpen&&<><div className="nav-label nav-label-categories">CATEGORIES
@@ -1078,6 +1079,8 @@ export default function GamingHQ() {
         <div className="blank-state"><h2>Couldn't find that page.</h2><button className="primary" onClick={()=>go("/")}>Back to dashboard</button></div>}
       </main>
     </div>
+          <input ref={gamesInputRef} type="file" accept=".json,application/json" className="hidden-backup-input"
+            onChange={e=>{const file=e.currentTarget.files?.[0];if(file)void importGamesOnly(file);}}/>
     <div className="modal-backdrop" hidden={!showPreferences||!!modal} onMouseDown={e=>{if(e.target===e.currentTarget)setShowPreferences(false);}}>
       <div className="dialog preferences-dialog" role="dialog" aria-modal={showPreferences} aria-label="Playquill preferences">
         <div className="dialog-head"><h2>Preferences</h2>
@@ -1094,8 +1097,7 @@ export default function GamingHQ() {
           </div>
           <div className="dialog-separator"/>
           <div className="setting-caption">Library & backups</div>
-          <input ref={gamesInputRef} type="file" accept=".json,application/json" className="hidden-backup-input"
-            onChange={e=>{const file=e.currentTarget.files?.[0];if(file)void importGamesOnly(file);}}/>
+
           <button className="secondary" onClick={()=>gamesInputRef.current?.click()}>Import games only (JSON)</button>
 
           <button className="secondary" onClick={exportBackup}>Download JSON backup</button>
@@ -1113,8 +1115,8 @@ export default function GamingHQ() {
         </div>
       </div>
     </div>
-    {modal&&<div className="modal-backdrop" onPointerDown={e=>e.stopPropagation()} onMouseDown={e=>{if(e.target===e.currentTarget)setModal(null)}}>
-      <div key={modal.type} ref={dialogRef} className="dialog" role="dialog" aria-modal="true" aria-label={modal.type==="catalog"?"Add games":modal.type==="organize"?"Organize game":"Add new item"}>
+    {modal&&<div className={"modal-backdrop"+(modal.type==="catalog"?" catalog-backdrop":"")} onPointerDown={e=>e.stopPropagation()} onMouseDown={e=>{if(e.target===e.currentTarget)setModal(null)}}>
+      <div key={modal.type} ref={dialogRef} className={"dialog"+(modal.type==="catalog"?" catalog-dialog":"")} role="dialog" aria-modal="true" aria-label={modal.type==="catalog"?"Add games":modal.type==="organize"?"Organize game":"Add new item"}>
         <div className="dialog-head"><h2>{modal.type==="catalog"?"Import games":modal.type==="game"?"Add a game":modal.type==="edit-game"?"Edit game":
           modal.type==="category"?"New category":modal.type==="shelf"?"New shelf":
           modal.type==="link"?"Add quick link":modal.type==="edit-link"?"Edit quick link":
