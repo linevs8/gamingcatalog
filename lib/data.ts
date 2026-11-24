@@ -51,6 +51,7 @@ type DesktopStorage = {
   load: () => Promise<Data | null>;
   save: (data: Data) => Promise<boolean>;
   saveSync: (data: Data) => boolean;
+  focusWindow?: () => void;
 };
 declare global {
   interface Window { playquillDesktop?: DesktopStorage }

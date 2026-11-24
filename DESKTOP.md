@@ -6,8 +6,8 @@ Playquill is a personal game library and journal with a **real desktop app** bui
 
 The Windows CI workflow builds two artifacts from the same verified source:
 
-- **Playquill-Setup-0.2.0-x64.exe** — Windows installer (recommended), with Start Menu/Desktop shortcuts and normal removal through Windows Settings.
-- **Playquill-Portable-0.2.0-x64.exe** — standalone portable executable without an installer.
+- **Playquill-Setup-0.3.0-x64.exe** — Windows installer (recommended), with Start Menu/Desktop shortcuts and normal removal through Windows Settings.
+- **Playquill-Portable-0.3.0-x64.exe** — standalone portable executable without an installer.
 
 Download the `Playquill-Windows-x64-verified` artifact from the successful **Build and verify Playquill for Windows** GitHub Actions run. Both files are unsigned developer builds. Windows SmartScreen may show a warning; inspect the official build source before choosing to proceed.
 
@@ -26,7 +26,7 @@ The build writes both `.exe` files to `dist/`.
 
 The first Playquill 0.1.0 portable binary sometimes failed to start with **Port 41771 may be occupied**. It launched itself as a second executable to start a Node.js server, which was not reliable for portable EXEs.
 
-The 0.2.0 launcher uses Electron's dedicated `utilityProcess.fork`, chooses a free local loopback port, starts the bundled Next.js server, and **requires valid HTML and CSS** before opening the main window. It records startup information in the user's Electron data folder as `startup.log`. If startup fails, the error dialog gives the log location. The Windows CI pipeline must successfully run the *actual packaged executable* in smoke-test mode before generating downloadable installers.
+The 0.2.0 launcher uses Electron's dedicated `utilityProcess.fork`, chooses a free local loopback port, starts the bundled Next.js server, and **requires valid HTML and CSS** before opening the main window. It records startup information in the user's Electron data folder as `startup.log`. If startup fails, the error dialog gives the log location. The Windows CI pipeline must successfully run the *actual packaged executable* in smoke-test mode before generating downloadable installers. Version 0.3.0 also exercises the renderer: open/close the catalog twice, type into its focused search field, add a manual title, confirm it is written to the native library, and reload it. The test uses an isolated temporary profile.
 
 Developer smoke test after `npm run build && npm run desktop:prepare`:
 
@@ -35,11 +35,11 @@ npx electron-builder --win --x64 --dir --publish never
 node scripts/smoke-windows.cjs dist/win-unpacked/Playquill.exe
 ```
 
-A passing build **does not** replace hands-on Windows testing of the notes editor, imports, drag-and-drop, sign-in and shutdown.
+A passing build **does not** replace hands-on Windows testing of live IGDB search, cover lookups, notes, import, drag-and-drop, sign-in and shutdown.
 
 ## Import your existing web collection
 
-Desktop Playquill uses its own persistent Electron browser profile. Existing data in the Vercel preview stays on that hostname:
+Desktop Playquill saves your library in its stable Windows application data directory (`library.json`). Your installed and portable editions use the same local collection. Existing data in the Vercel preview stays on that hostname:
 
 1. Open Playquill in the browser and choose **Preferences → Download JSON backup**.
 2. Launch the Windows application and choose **Preferences → Import backup**.
@@ -55,3 +55,14 @@ Export a JSON backup before switching from browser to desktop or between version
 - No remote auto-updater or telemetry is included.
 - The cloud account uses public client credentials and private per-user data; Google OAuth and end-to-end cloud testing may require additional configuration and are **not** guaranteed by the desktop smoke test.
 - Do not merge, replace production, or mark a public release stable until Windows smoke tests and user acceptance pass.
+
+## Interface design contract
+
+**Clutter is the death of UI.** Playquill is a quiet personal game library, not a control panel.
+
+- Artwork and the active task take priority. One obvious primary action per view.
+- Put infrequent actions in contextual menus; reveal selection controls only in selection mode.
+- No repeated headings, slogans, redundant instructions, decorative badges, or permanent technical status banners.
+- Maintain compact, readable typography and consistent spacing. Keep keyboard-accessible controls and explicit focus feedback.
+- Loading, failures, and successful operations should be communicated unobtrusively, without blocking unrelated work.
+- Do not remove useful capabilities simply to achieve a cleaner appearance; preserve them behind an appropriate progressive-disclosure interaction.

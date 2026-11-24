@@ -80,11 +80,36 @@ async function gamesFromIgdb(query: string): Promise<IgdbGame[]> {
     .filter((item): item is IgdbGame => item !== null);
 }
 
+async function hostedIgdb(query: string): Promise<NextResponse> {
+  const configured = process.env.PLAYQUILL_IGDB_PROXY_ORIGIN;
+  // Fixed trusted endpoint; the desktop binary never contains the IGDB secret.
+  if (configured !== "https://gamingcatalog.vercel.app") {
+    return errorResponse("IGDB is not configured for this installation.", "NOT_CONFIGURED", 503);
+  }
+  try {
+    const response = await fetch(configured + "/api/igdb/search?q=" + encodeURIComponent(query), {
+      cache: "no-store", redirect: "error", signal: AbortSignal.timeout(12000)
+    });
+    if (!response.ok) {
+      return errorResponse(response.status === 503
+        ? "The hosted IGDB service needs its production credentials enabled."
+        : "The hosted IGDB search is currently unavailable.", "HOSTED_UNAVAILABLE", 503);
+    }
+    const json: unknown = await response.json();
+    if (!json || typeof json !== "object" || !("games" in json) || !Array.isArray(json.games))
+      throw new Error("Unexpected hosted response");
+    return NextResponse.json({ games: json.games.slice(0, 20) }, { headers: { "Cache-Control": "no-store" } });
+  } catch (error) {
+    console.error("Hosted IGDB lookup failed:", error);
+    return errorResponse("Cannot reach the hosted IGDB service. Check your connection.", "HOSTED_UNAVAILABLE", 503);
+  }
+}
+
 export async function GET(request: NextRequest) {
   const query = safeSearchQuery(request.nextUrl.searchParams.get("q") ?? "");
   if (!query) return errorResponse("Enter at least 2 characters (maximum 80).", "INVALID_QUERY", 400);
   if (!process.env.IGDB_CLIENT_ID || !process.env.IGDB_CLIENT_SECRET) {
-    return errorResponse("Game search hasn't been connected yet. You can still add games manually.", "NOT_CONFIGURED", 503);
+    return hostedIgdb(query);
   }
   const key = query.toLowerCase();
   const cached = resultCache.get(key);
