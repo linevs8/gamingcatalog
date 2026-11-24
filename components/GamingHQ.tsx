@@ -74,9 +74,11 @@ export default function GamingHQ() {
   const [saveStatus, setSaveStatus] = useState<"saving" | "saved" | "error">("saved");
   const latestRevision = useRef(0);
   const currentDataRef = useRef(data);
+  const loadedRef = useRef(false);
+  const [loadFailure, setLoadFailure] = useState("");
   currentDataRef.current = data;
   useEffect(() => {
-    const flush = () => { flushDesktopData(currentDataRef.current); };
+    const flush = () => { if (loadedRef.current) flushDesktopData(currentDataRef.current); };
     window.addEventListener("pagehide", flush);
     window.addEventListener("beforeunload", flush);
     return () => { window.removeEventListener("pagehide", flush); window.removeEventListener("beforeunload", flush); };
@@ -221,12 +223,12 @@ export default function GamingHQ() {
 
   useEffect(() => {
     let live = true;
-    loadData().then(value => { if (live) { setData(value); setReady(true); } })
-      .catch(() => { if (live) { setReady(true); setSaveStatus("error"); } });
+    loadData().then(value => { if (live) { loadedRef.current = true; setData(value); setReady(true); } })
+      .catch(() => { if (live) { setLoadFailure("Your library could not be opened. No saved data has been overwritten. Restart Playquill to try again."); setSaveStatus("error"); } });
     return () => { live = false; };
   }, []);
   useEffect(() => {
-    if (!ready) return;
+    if (!ready || !loadedRef.current) return;
     const rev = ++latestRevision.current;
     setSaveStatus("saving");
     const timeout = window.setTimeout(() => {
@@ -601,7 +603,7 @@ export default function GamingHQ() {
     try {
       if (file.size > 25_000_000) throw new Error("Backup file is too large.");
       const imported=validateImport(JSON.parse(await file.text()));
-      if (!window.confirm("REPLACE this browser's Playquill library with the imported backup? Export your current library first. This cannot be undone.")) return;
+      if (!window.confirm("REPLACE this device's Playquill library with the imported backup? Export your current library first. This cannot be undone.")) return;
       await saveData(imported);
       setData(imported);
       setBackupMessage("Backup imported successfully.");
@@ -1069,7 +1071,7 @@ export default function GamingHQ() {
         </div>
 
       </header>
-      <main className="main-content">{!ready?<div className="loading"><span className="pulse-dot"/> Opening your space…</div>:
+      <main className="main-content">{loadFailure?<div className="blank-state compact"><h2>Library unavailable</h2><p role="alert">{loadFailure}</p></div>:!ready?<div className="loading"><span className="pulse-dot"/> Opening your space…</div>:
         section==="dashboard"?Dashboard():section==="library"?LibraryScreen():section==="shelves"?ShelvesScreen():
         section==="category"&&currentCategory?CategoryScreen({category:currentCategory}):
         section==="game"&&currentGame?GameScreen({game:currentGame}):
@@ -1118,7 +1120,7 @@ export default function GamingHQ() {
           modal.type==="link"?"Add quick link":modal.type==="edit-link"?"Edit quick link":
           modal.type==="pick-library"?"Add from Library":"Organize game"}</h2><button className="icon-button" title="Close" onClick={()=>setModal(null)}><X size={20}/></button></div>
         {modal.type==="catalog"&&<div className="dialog-fields">
-          <label>Search games<input ref={catalogInputRef} type="search" autoFocus autoComplete="off" spellCheck={false} value={catalogQuery} onPointerDown={e=>e.stopPropagation()} onClick={e=>e.currentTarget.focus()} onChange={e=>setCatalogQuery(e.target.value)} placeholder="Search by title…"/></label>
+          <label>Search games<input ref={catalogInputRef} type="search" autoFocus autoComplete="off" spellCheck={false} value={catalogQuery} onPointerDown={e=>e.stopPropagation()} onClick={e=>{window.playquillDesktop?.focusWindow?.();e.currentTarget.focus();}} onChange={e=>setCatalogQuery(e.target.value)} placeholder="Search by title…"/></label>
           {catalogBusy&&<p role="status" className="muted small">Searching game catalog…</p>}
           {catalogError&&<p role="alert" className="field-error">{catalogError}</p>}
           <div className="catalog-results">
