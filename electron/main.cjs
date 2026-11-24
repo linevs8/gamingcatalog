@@ -375,7 +375,7 @@ async function runRendererSmoke() {
   }
   if (!saved) throw new Error("Renderer smoke test failed: library file did not persist");
   const backupNames = fs.readdirSync(path.join(app.getPath("userData"),"backups"));
-  if (!backupNames.some(name=>/^\\d{4}-\\d{2}-\\d{2}\\.json$/.test(name))) throw Error("Native backup missing");
+  if (!backupNames.some(name=>/^\d{4}-\d{2}-\d{2}\.json$/.test(name))) throw Error("Native backup missing");
   await wc.loadURL(homeURL + "/library");
   await wait("game restored from native storage", "Array.from(document.querySelectorAll('.game-tile-copy strong')).some(e=>e.textContent==='Playquill test game')");
   return { searchFocus: true, manualAdd: true, nativeSave: true, reloadRestore: true, localBackup: true };
