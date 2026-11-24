@@ -73,3 +73,24 @@ test("invalid drag targets do nothing",()=>{
   assert.equal(moveGamePlacement(data,"priority","g1","not-there"),data);
   assert.equal(placeCategory(data,"solo","unknown-shelf"),data);
 });
+
+test("adjacent forward and backward moves swap positions immediately",()=>{
+  const d=create();
+  const right=moveGamePlacement(d,"priority","g1","priority","g2");
+  assert.deepEqual(ids(right,"priority"),["g2","g1","g3"]);
+  assert.deepEqual(ids(moveGamePlacement(right,"priority","g1","priority","g2"),"priority"),["g1","g2","g3"]);
+  assert.deepEqual(ids(moveGamePlacement(d,"priority","g2","priority","g3"),"priority"),["g1","g3","g2"]);
+  assert.deepEqual(ids(moveGamePlacement(d,"priority","g1","priority","g3"),"priority"),["g2","g3","g1"]);
+  assert.deepEqual(ids(right,"solo"),ids(d,"solo"));
+  assert.deepEqual(right.notes,d.notes);
+});
+test("cross-category insertion normalizes ranks before sorting",()=>{
+  const d=create();
+  d.memberships=d.memberships.map(m=>({...m,order:m.order*10+10}));
+  assert.deepEqual(ids(moveGamePlacement(d,"library","g2","solo","g3"),"solo"),["g1","g2","g3"]);
+});
+test("dashboard categories move forward by one position",()=>{
+  const d=create();
+  const next=reorderCategories(d,"priority","solo");
+  assert.deepEqual(next.categories.filter(c=>c.location==="dashboard").sort((a,b)=>a.order-b.order).map(c=>c.id),["solo","priority"]);
+});

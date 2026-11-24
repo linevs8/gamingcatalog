@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 import {
   type Category, type Data, type Game, type QuickLink, emptyData,
-  loadData, makeId, notePreview, saveData, flushDesktopData, validCover, validateImport, type ThemeName
+  loadData, makeId, notePreview, saveData, flushDesktopData, validCover, validateImport, dashboardSize, type DashboardSize, type ThemeName
 } from "@/lib/data";
 
 type Modal = null | { type: "catalog" | "game" | "category" | "shelf" | "link" | "organize" | "pick-library" | "edit-game" | "edit-link"; gameId?: string; categoryId?: string; linkId?: string };
@@ -778,9 +778,16 @@ export default function GamingHQ() {
   }
 
   function Dashboard() {
-    return <div className="screen dashboard-screen">
+    const size = dashboardSize(data.dashboardSize);
+    return <div className="screen dashboard-screen" data-density={size}>
       <div className="page-top"><div><h1>Dashboard</h1></div>
-        <button className="primary" onClick={()=>openModal("category")}><Plus size={17}/> New category</button>
+        <div className="page-actions dashboard-actions">
+          <select className="dashboard-size-picker" aria-label="Dashboard card size" title="Dashboard card size" value={size}
+            onChange={event=>change(prev=>({...prev,dashboardSize:dashboardSize(event.target.value)}))}>
+            {(["compact","medium","large"] as DashboardSize[]).map(value=><option key={value} value={value}>{value[0].toUpperCase()+value.slice(1)}</option>)}
+          </select>
+          <button className="primary" onClick={()=>openModal("category")}><Plus size={17}/> New category</button>
+        </div>
       </div>
       {!dashboardCategories.length ? <div className="blank-state">
         <div className="blank-symbol"><LayoutDashboard size={35}/></div>
@@ -1175,7 +1182,7 @@ export default function GamingHQ() {
           {ready&&typeof window!=="undefined"&&window.playquillDesktop?.checkUpdate&&<>
             <div className="dialog-separator"/>
             <div className="desktop-update-row">
-              <span className="muted small">Playquill {updateInfo?.current||"0.4.0"}</span>
+              <span className="muted small">Playquill {updateInfo?.current||"0.4.1"}</span>
               <button className="secondary small-button" disabled={updateBusy||updateStage!=="idle"} onClick={()=>void checkUpdate()}>{updateBusy?"Checking…":"Check for updates"}</button>
             </div>
             {updateStage==="downloading"?<div className="desktop-update-progress" role="status"><span>Downloading update · {updatePercent}%</span><progress aria-label="Update download" max={100} value={updatePercent}/></div>:
