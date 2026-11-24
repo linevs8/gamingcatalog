@@ -54,6 +54,9 @@ type DesktopStorage = {
   saveSync: (data: Data) => boolean;
   focusWindow?: () => void;
   checkUpdate?: (force?: boolean) => Promise<{current:string;available:boolean;latest:string|null;error:string|null}>;
+  downloadUpdate?: () => Promise<{latest:string}>;
+  installUpdate?: () => Promise<boolean>;
+  onUpdateProgress?: (callback:(percent:number)=>void) => () => void;
   openReleases?: () => Promise<void>;
   openBackups?: () => Promise<void>;
 };
