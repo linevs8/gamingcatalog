@@ -1,6 +1,6 @@
 // Windows desktop runtime acceptance test. A successful electron-builder build
 // alone is insufficient: start the actual packaged Playquill.exe and require a
-// locally served Next.js HTML page AND CSS before accepting the release.
+// locally served Next.js HTML/CSS, renderer focus, manual add and native persistence.
 const { spawn } = require("node:child_process");
 const fs = require("node:fs");
 const os = require("node:os");
@@ -24,7 +24,7 @@ const proc = spawn(exe, args, { windowsHide: true, stdio: "ignore" });
 const timeout = setTimeout(() => {
   console.error("Playquill desktop smoke test timed out");
   proc.kill();
-}, 85000);
+}, 150000);
 proc.once("error", error => {
   clearTimeout(timeout);
   console.error("Could not launch packaged Playquill:", error);
@@ -51,7 +51,10 @@ proc.once("exit", (code, signal) => {
     }
   }
   if (code !== 0 || signal || !result.ok || result.html !== 200 ||
-      result.css !== 200 || result.packaged !== true) {
+      result.css !== 200 || result.packaged !== true || !result.searchFocus || !result.manualAdd || !result.nativeSave || !result.reloadRestore) {
     process.exitCode = 1;
+  }
+  if (result.smokeProfile && path.dirname(result.smokeProfile) === os.tmpdir() && path.basename(result.smokeProfile).startsWith('playquill-ui-test-')) {
+    try { fs.rmSync(result.smokeProfile, {recursive:true,force:true}); } catch {}
   }
 });
