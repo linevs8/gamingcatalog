@@ -4,10 +4,22 @@ on:
   pull_request:
     branches:
       - main
+  push:
+    branches: [main]
+    paths: [package.json]
   workflow_dispatch:
+    inputs:
+      publish_release:
+        description: Publish verified installer to GitHub Releases (main only)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
+
+concurrency:
+  group: desktop-windows-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build-windows:
@@ -58,6 +70,14 @@ jobs:
       - name: Package Windows installer and portable EXE
         run: npx electron-builder --win --x64 --publish never
 
+      - name: Generate installer checksums
+        shell: pwsh
+        run: |
+          Get-ChildItem dist/Playquill-*.exe | Sort-Object Name | ForEach-Object {
+            $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $($_.Name)"
+          } | Set-Content -Encoding ascii dist/SHA256SUMS.txt
+
       - name: Upload verified Windows applications
         uses: actions/upload-artifact@v4
         with:
@@ -65,5 +85,45 @@ jobs:
           path: |
             dist/Playquill-Setup-*.exe
             dist/Playquill-Portable-*.exe
+            dist/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 14
+
+  publish-release:
+    name: Publish permanent Windows release
+    needs: build-windows
+    if: ${{ github.ref == 'refs/heads/main' && (github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.publish_release)) }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: Playquill-Windows-x64-verified
+          path: release
+      - name: Verify and publish immutable version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(node -p 'require("./package.json").version')"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          tag="v$version"
+          test -f "release/Playquill-Setup-$version-x64.exe"
+          test -f "release/Playquill-Portable-$version-x64.exe"
+          (cd release && sha256sum -c SHA256SUMS.txt)
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "Release $tag already exists; leaving it unchanged."
+            exit 0
+          fi
+          gh release create "$tag" \
+            "release/Playquill-Setup-$version-x64.exe" \
+            "release/Playquill-Portable-$version-x64.exe" \
+            release/SHA256SUMS.txt \
+            --target "$GITHUB_SHA" \
+            --title "Playquill $version" \
+            --notes "Windows x64 installer and portable edition. Packaged renderer, native save and backup smoke tests passed. Developer build: Windows code signing is not configured. Download from this official release and verify SHA256SUMS.txt."
