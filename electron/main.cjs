@@ -404,6 +404,33 @@ async function runRendererSmoke() {
     await run("document.querySelector(" + JSON.stringify(selector) + ").click()");
   };
   await wait("library loaded", "!document.querySelector('.main-content .loading') && !!document.querySelector('.dashboard-screen')");
+  // Theme changes must be palette-only. Verify the installed renderer, not a CSS mock.
+  await click(".preference-button");
+  await wait("Preferences visible", "!!document.querySelector('.modal-backdrop:not([hidden]) .preferences-dialog')");
+  const paletteColors = new Set();
+  let firstGeometry = null;
+  for (const theme of ["midnight","obsidian","violet","teal"]) {
+    await click(".theme-preview-"+theme);
+    await wait("theme applied "+theme, "document.querySelector('.app-shell').classList.contains('theme-"+theme+"')");
+    const sample = await run(`(() => {
+      const get = selector => getComputedStyle(document.querySelector(selector));
+      return {
+        background:get(".main-shell").backgroundColor,
+        accent:get(".app-shell").getPropertyValue("--accent").trim(),
+        geometry:[get(".sidebar").width,get(".topbar").height,get(".main-content").padding,get(".dashboard-screen h1").fontFamily,get(".dashboard-screen h1").fontSize,get(".dashboard-size-picker").height]
+      };
+    })()`);
+    if (!sample.background || !sample.accent) throw Error("Theme palette missing");
+    paletteColors.add(sample.background+"|"+sample.accent);
+    const geometry = JSON.stringify(sample.geometry);
+    if (firstGeometry === null) firstGeometry = geometry;
+    else if (geometry !== firstGeometry) throw Error("Theme changed layout: "+theme);
+  }
+  if (paletteColors.size !== 4) throw Error("Theme palettes are not distinct");
+  await click(".theme-preview-midnight");
+  await wait("default theme restored", "document.querySelector('.app-shell').classList.contains('theme-midnight')");
+  await click('[aria-label="Close preferences"]');
+  await wait("preferences closed", "!!document.querySelector('.modal-backdrop[hidden] .preferences-dialog')");
   await click('.nav a[href="/library"]');
   await wait("All Games screen", "!!document.querySelector('.library-screen .blank-state button.primary')");
   const search = '.catalog-dialog input[type="search"]';
@@ -438,7 +465,7 @@ async function runRendererSmoke() {
   if (!backupNames.some(name=>/^\d{4}-\d{2}-\d{2}\.json$/.test(name))) throw Error("Native backup missing");
   await wc.loadURL(homeURL + "/library");
   await wait("game restored from native storage", "Array.from(document.querySelectorAll('.game-tile-copy strong')).some(e=>e.textContent==='Playquill test game')");
-  return { searchFocus: true, manualAdd: true, nativeSave: true, reloadRestore: true, localBackup: true };
+  return { searchFocus: true, manualAdd: true, nativeSave: true, reloadRestore: true, localBackup: true, themeConsistency: true };
 }
 
 if (!app.requestSingleInstanceLock()) {
