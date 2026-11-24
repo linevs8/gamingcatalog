@@ -6,6 +6,7 @@ const net = require("node:net");
 const http = require("node:http");
 const path = require("node:path");
 const os = require("node:os");
+const { snapshotLibrary, validSnapshot, atomicWrite } = require("./backups.cjs");
 
 const smokeMode = process.argv.includes("--playquill-smoke-test");
 const smokeReportArg = process.argv.find(arg => arg.startsWith("--playquill-smoke-report="));
@@ -40,7 +41,7 @@ function loadNativeLibrary(event) {
     const raw = fs.readFileSync(dataPath(), "utf8");
     if (Buffer.byteLength(raw) > DATA_LIMIT_BYTES) throw new Error("Library file exceeds 30 MB");
     const data = JSON.parse(raw);
-    if (!data || data.version !== 1 || !Array.isArray(data.games) || !Array.isArray(data.categories)) {
+    if (!validSnapshot(raw)) {
       throw new Error("Invalid Playquill library file");
     }
     return data;
@@ -58,10 +59,22 @@ function saveNativeLibrary(event, data) {
   const serialized = JSON.stringify(data);
   if (Buffer.byteLength(serialized) > DATA_LIMIT_BYTES) throw new Error("Library exceeds 30 MB");
   const filename = dataPath();
-  const temp = filename + ".tmp";
-  fs.mkdirSync(path.dirname(filename), { recursive: true });
-  fs.writeFileSync(temp, serialized, "utf8");
-  fs.renameSync(temp, filename);
+  if (!validSnapshot(serialized)) throw new Error("Invalid library snapshot");
+  let previous = null;
+  try { previous = fs.readFileSync(filename,"utf8"); } catch(error) { if(error.code !== "ENOENT") throw error; }
+  if (previous === serialized) return true;
+  if (previous !== null && !validSnapshot(previous)) throw new Error("Existing library is damaged; preserve it before restoring a backup");
+  // Capture a recoverable version before replacing a valid saved library.
+  try {
+    if (previous !== null) {
+      snapshotLibrary(app.getPath("userData"), previous);
+      atomicWrite(path.join(app.getPath("userData"),"backups","previous.json"),previous);
+    }
+  } catch (error) { log("Backup failed: " + error); }
+  atomicWrite(filename, serialized);
+  if (previous === null) {
+    try { snapshotLibrary(app.getPath("userData"),serialized); } catch(error) { log("Initial backup failed: " + error); }
+  }
   return true;
 }
 ipcMain.on("playquill:focus-window", event => {
@@ -69,6 +82,54 @@ ipcMain.on("playquill:focus-window", event => {
   if (event.sender !== mainWindow.webContents) return;
   // Recover renderer input focus following native dialogs and window switches.
   if (mainWindow.isFocused() && !mainWindow.webContents.isFocused()) mainWindow.webContents.focus();
+});
+const RELEASES = "https://github.com/linevs8/gamingcatalog/releases";
+let updateCache = null;
+let updateRequest = null;
+async function checkForUpdate(force = false) {
+  const current = app.getVersion();
+  const result = {current, available:false, latest:null, error:null};
+  if (smokeMode || !app.isPackaged) return result;
+  if (!force && updateCache && Date.now() - updateCache.time < 6*60*60*1000) return updateCache.result;
+  if (updateRequest) return updateRequest;
+  updateRequest = (async () => {
+    try {
+      const response = await fetch("https://api.github.com/repos/linevs8/gamingcatalog/releases/latest",{
+        headers:{"Accept":"application/vnd.github+json","User-Agent":"Playquill/"+current},
+        signal:AbortSignal.timeout(7000), redirect:"error"
+      });
+      if (response.status === 404) return {...result,error:"No published release yet."};
+      if (!response.ok) throw Error("Release check unavailable");
+      const body = await response.json();
+      const parse = s => /^v?(\d+)\.(\d+)\.(\d+)$/.exec(s)?.slice(1).map(Number);
+      const installed = parse(current), newest = parse(body.tag_name);
+      if (!installed || !newest || body.draft || body.prerelease) throw Error("No stable release found");
+      const index = newest.findIndex((part,i)=>part !== installed[i]);
+      const available = index >= 0 && newest[index] > installed[index] &&
+        Array.isArray(body.assets) && body.assets.some(a=>a.name === "Playquill-Setup-"+newest.join(".")+"-x64.exe");
+      const checked = {...result,available,latest:newest.join(".")};
+      updateCache = {time:Date.now(),result:checked};
+      return checked;
+    } catch(error) {
+      return {...result,error:"Unable to check for updates."};
+    }
+  })();
+  try {return await updateRequest;} finally {updateRequest = null;}
+}
+ipcMain.handle("playquill:check-update", (event, force) => {
+  if (!validSender(event)) throw Error("Untrusted update request");
+  return checkForUpdate(force === true);
+});
+ipcMain.handle("playquill:open-releases", event => {
+  if (!validSender(event)) throw Error("Untrusted release request");
+  return shell.openExternal(RELEASES);
+});
+ipcMain.handle("playquill:open-backups", async event => {
+  if (!validSender(event)) throw Error("Untrusted backup request");
+  const folder = path.join(app.getPath("userData"),"backups");
+  fs.mkdirSync(folder,{recursive:true});
+  const error = await shell.openPath(folder);
+  if (error) throw Error(error);
 });
 ipcMain.handle("playquill:load", event => loadNativeLibrary(event));
 ipcMain.handle("playquill:save", (event, data) => saveNativeLibrary(event, data));
@@ -313,9 +374,11 @@ async function runRendererSmoke() {
     await sleep(150);
   }
   if (!saved) throw new Error("Renderer smoke test failed: library file did not persist");
+  const backupNames = fs.readdirSync(path.join(app.getPath("userData"),"backups"));
+  if (!backupNames.some(name=>/^\\d{4}-\\d{2}-\\d{2}\\.json$/.test(name))) throw Error("Native backup missing");
   await wc.loadURL(homeURL + "/library");
   await wait("game restored from native storage", "Array.from(document.querySelectorAll('.game-tile-copy strong')).some(e=>e.textContent==='Playquill test game')");
-  return { searchFocus: true, manualAdd: true, nativeSave: true, reloadRestore: true };
+  return { searchFocus: true, manualAdd: true, nativeSave: true, reloadRestore: true, localBackup: true };
 }
 
 if (!app.requestSingleInstanceLock()) {
