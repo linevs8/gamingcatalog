@@ -249,7 +249,7 @@ export default function GamingHQ() {
   useEffect(() => {
     let live = true;
     loadData().then(value => { if (live) { loadedRef.current = true; setData(value); setReady(true); } })
-      .catch(() => { if (live) { setLoadFailure("Your library could not be opened. No saved data has been overwritten. Restart Playquill to try again."); setSaveStatus("error"); } });
+      .catch(() => { if (live) { setLoadFailure("Your library could not be opened. Your saved file is unchanged. Open Preferences to restore a JSON backup."); setSaveStatus("error"); } });
     return () => { live = false; };
   }, []);
   useEffect(() => {
@@ -630,8 +630,12 @@ export default function GamingHQ() {
       if (file.size > 30*1024*1024) throw new Error("Backup file is too large.");
       const imported=validateImport(JSON.parse(await file.text()));
       if (!window.confirm("REPLACE this device's Playquill library with the imported backup? Export your current library first. This cannot be undone.")) return;
-      await saveData(imported);
+      await saveData(imported, true);
+      currentDataRef.current = imported;
+      loadedRef.current = true;
       setData(imported);
+      setLoadFailure("");
+      setReady(true);
       setBackupMessage("Backup imported successfully.");
       go("/");
     } catch(e) {
@@ -1126,7 +1130,7 @@ export default function GamingHQ() {
           <button className="secondary" onClick={()=>gamesInputRef.current?.click()}>Import games only (JSON)</button>
 
           <button className="secondary" onClick={exportBackup}>Download JSON backup</button>
-          {ready&&typeof window!=="undefined"&&window.playquillDesktop?.openBackups&&<button className="secondary" onClick={()=>void openLocalBackups()}>Open local backups</button>}
+          {(ready||!!loadFailure)&&typeof window!=="undefined"&&window.playquillDesktop?.openBackups&&<button className="secondary" onClick={()=>void openLocalBackups()}>Open local backups</button>}
           <input ref={backupInputRef} type="file" accept=".json,application/json" className="hidden-backup-input"
             onChange={e=>{const file=e.currentTarget.files?.[0];if(file)void importBackup(file);}}/>
           <button className="secondary" onClick={()=>backupInputRef.current?.click()}>Import backup (replace this library)</button>
