@@ -50,8 +50,15 @@ export const emptyData = (): Data => ({
 type DesktopStorage = {
   load: () => Promise<Data | null>;
   save: (data: Data) => Promise<boolean>;
+  restore?: (data: Data) => Promise<boolean>;
   saveSync: (data: Data) => boolean;
   focusWindow?: () => void;
+  checkUpdate?: (force?: boolean) => Promise<{current:string;available:boolean;latest:string|null;error:string|null}>;
+  downloadUpdate?: () => Promise<{latest:string}>;
+  installUpdate?: () => Promise<boolean>;
+  onUpdateProgress?: (callback:(percent:number)=>void) => () => void;
+  openReleases?: () => Promise<void>;
+  openBackups?: () => Promise<void>;
 };
 declare global {
   interface Window { playquillDesktop?: DesktopStorage }
@@ -122,11 +129,15 @@ export async function loadData(): Promise<Data> {
   } catch { /* Nothing to restore. */ }
   return emptyData();
 }
-export function saveData(data: Data): Promise<void> {
+export function saveData(data: Data, explicitRestore = false): Promise<void> {
   // Serialize writes, so an older snapshot cannot overwrite a newer one.
   const write = async () => {
     const desktop = desktopStorage();
-    if (desktop) { await desktop.save(data); return; }
+    if (desktop) {
+      if (explicitRestore && desktop.restore) await desktop.restore(data);
+      else await desktop.save(data);
+      return;
+    }
     try {
       await toDb(data);
     } catch {

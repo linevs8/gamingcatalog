@@ -88,3 +88,68 @@ html body .app-shell .catalog-backdrop { align-items:start; padding-top:clamp(20
 html body .app-shell .catalog-dialog { max-height:calc(88vh - 28px); }
 html body .app-shell .catalog-dialog .dialog-fields { min-width:0; }
 html body .app-shell .catalog-dialog .catalog-results { min-height:0; overflow-y:auto; overscroll-behavior:contain; }
+
+/* Category identity: one accent, carried through the surfaces rather than
+   a loud color block. Artwork and the user's titles stay the focal point. */
+html body .app-shell[class] .dashboard-screen .category-preview {
+  background: radial-gradient(ellipse at 8% 0%, color-mix(in srgb, var(--category-accent, var(--accent)) 17%, transparent), transparent 72%), var(--panel);
+  border-color: color-mix(in srgb, var(--category-accent, var(--accent)) 34%, var(--border));
+  box-shadow: 0 9px 24px #0004;
+}
+html body .app-shell[class] .dashboard-screen .category-preview:hover {
+  background: radial-gradient(ellipse at 8% 0%, color-mix(in srgb, var(--category-accent, var(--accent)) 23%, transparent), transparent 75%), var(--panel);
+  border-color: color-mix(in srgb, var(--category-accent, var(--accent)) 65%, var(--border));
+  box-shadow: 0 12px 28px #0005;
+}
+html body .app-shell[class] .dashboard-screen .category-preview:before {
+  background: linear-gradient(90deg, color-mix(in srgb,var(--category-accent,var(--accent)) 75%,#141b21),var(--category-accent,var(--accent)));
+  box-shadow: none;
+}
+html body .app-shell[class] .dashboard-screen .category-icon {
+  color: var(--category-accent,var(--accent)) !important;
+}
+html body .app-shell[class] .dashboard-screen .category-head h2 {
+  color: color-mix(in srgb,var(--category-accent,var(--accent)) 25%,var(--text));
+}
+html body .app-shell[class] .dashboard-screen .category-arrow {
+  color: color-mix(in srgb,var(--category-accent,var(--accent)) 65%,var(--muted));
+}
+html body .app-shell[class] .side-category .side-category-label.active {
+  background: color-mix(in srgb,var(--category-accent,var(--accent)) 15%,var(--sidebar));
+  box-shadow: inset 2px 0 var(--category-accent,var(--accent));
+  color: var(--text);
+}
+html body .app-shell[class] .shelf-category {
+  background: color-mix(in srgb,var(--category-accent,var(--accent)) 8%,var(--panel));
+  border-inline-start: 2px solid color-mix(in srgb,var(--category-accent,var(--accent)) 70%,var(--border));
+}
+html body .app-shell[class] .shelf-category > svg:first-child {color:var(--category-accent,var(--accent))}
+html body .app-shell[class] .category-screen > .page-top {
+  padding: 19px 20px;
+  border-radius: 12px;
+  border: 1px solid color-mix(in srgb,var(--category-accent,var(--accent)) 28%,var(--border));
+  background: linear-gradient(105deg,color-mix(in srgb,var(--category-accent,var(--accent)) 15%,var(--panel)),var(--panel) 76%);
+}
+html body .app-shell[class] .category-screen .category-title h1 {
+  color:color-mix(in srgb,var(--category-accent,var(--accent)) 25%,var(--text));
+}
+html body .app-shell[class] .category-screen .page-top .primary {
+  background: color-mix(in srgb,var(--category-accent,var(--accent)) 20%,var(--panel));
+  color:var(--text);
+  border-color:color-mix(in srgb,var(--category-accent,var(--accent)) 60%,var(--border));
+}
+html body .app-shell[class] .category-screen .page-top .primary:hover {
+  background:color-mix(in srgb,var(--category-accent,var(--accent)) 30%,var(--panel));
+}
+html body .app-shell[class] .category-screen .game-tile:hover .cover {
+  border-color:var(--category-accent,var(--accent));
+}
+.desktop-update-row {display:flex;align-items:center;justify-content:space-between;gap:12px;}
+.preference-button {position:relative;}
+.preference-button.update-ready:after {content:"";position:absolute;top:5px;right:4px;width:6px;height:6px;border-radius:50%;background:var(--accent);pointer-events:none;}
+@media(max-width:760px) {
+  html body .app-shell[class] .category-screen > .page-top {padding:15px;}
+}
+
+.desktop-update-progress{display:flex;flex-direction:column;gap:7px;font-size:12px;color:var(--muted)}
+.desktop-update-progress progress{width:100%;height:5px;accent-color:var(--accent)}

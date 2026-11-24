@@ -28,7 +28,10 @@ import {
 
 type Modal = null | { type: "catalog" | "game" | "category" | "shelf" | "link" | "organize" | "pick-library" | "edit-game" | "edit-link"; gameId?: string; categoryId?: string; linkId?: string };
 type CatalogGame = { id: string; title: string; coverUrl: string; subtitle: string; source: string; platforms: string[]; year?: number };
-const colors = ["#77A9F7", "#B39BFA", "#70C8BE", "#E8B878", "#F29BAD", "#96B6D1"];
+const colors = ["#77A9F7", "#B39BFA", "#70C8BE", "#E8B878", "#F29BAD", "#96B6D1", "#E27F78", "#9ACB80"];
+function categoryAccent(color: string): React.CSSProperties {
+  return {"--category-accent": /^#[0-9a-f]{6}$/i.test(color) ? color : colors[0]} as React.CSSProperties;
+}
 const icons = [
   "star", "gamepad", "book", "sparkle", "swords", "trophy",
   "heart", "users", "flame", "target", "bookmark", "monitor",
@@ -126,6 +129,58 @@ export default function GamingHQ() {
   const gamesInputRef = useRef<HTMLInputElement>(null);
   const [showPreferences,setShowPreferences] = useState(false);
   const [backupMessage,setBackupMessage] = useState("");
+  const [updateInfo,setUpdateInfo] = useState<{current:string;available:boolean;latest:string|null;error:string|null}|null>(null);
+  const [updateBusy,setUpdateBusy] = useState(false);
+  const [updateChecked,setUpdateChecked] = useState(false);
+  const [updateStage,setUpdateStage] = useState<"idle"|"downloading"|"ready"|"installing">("idle");
+  const [updatePercent,setUpdatePercent] = useState(0);
+  const [updateVersion,setUpdateVersion] = useState("");
+  const [updateError,setUpdateError] = useState("");
+  useEffect(() => {
+    return window.playquillDesktop?.onUpdateProgress?.(setUpdatePercent);
+  }, []);
+  const downloadDesktopUpdate = async () => {
+    if (!window.playquillDesktop?.downloadUpdate || updateStage!=="idle") return;
+    setUpdateError("");setUpdatePercent(0);setUpdateStage("downloading");
+    try {
+      const result=await window.playquillDesktop.downloadUpdate();
+      setUpdateVersion(result.latest);setUpdateStage("ready");
+    } catch(error) {
+      setUpdateError(error instanceof Error?error.message:"Update download failed. Try again.");
+      setUpdateStage("idle");
+    }
+  };
+  const installDesktopUpdate = async () => {
+    if (!window.playquillDesktop?.installUpdate || updateStage!=="ready") return;
+    setUpdateStage("installing");setUpdateError("");
+    try {
+      await saveData(currentDataRef.current);
+      const launched=await window.playquillDesktop.installUpdate();
+      if (!launched) setUpdateStage("ready");
+    } catch(error) {
+      setUpdateError(error instanceof Error?error.message:"Update installation failed.");
+      setUpdateStage("idle");
+    }
+  };
+  useEffect(() => {
+    if (!ready || !window.playquillDesktop?.checkUpdate) return;
+    let active = true;
+    const timeout = window.setTimeout(() => {
+      window.playquillDesktop?.checkUpdate?.().then(info=>{if(active)setUpdateInfo(info);}).catch(()=>{});
+    }, 3500);
+    return () => {active=false;window.clearTimeout(timeout);};
+  }, [ready]);
+  const checkUpdate = async () => {
+    if (!window.playquillDesktop?.checkUpdate || updateBusy) return;
+    setUpdateBusy(true);setUpdateChecked(true);
+    try {setUpdateInfo(await window.playquillDesktop.checkUpdate(true));}
+    catch {setUpdateInfo(info=>({current:info?.current||"",available:false,latest:null,error:"Unable to check for updates."}));}
+    finally {setUpdateBusy(false);}
+  };
+  const openLocalBackups = async () => {
+    try {await window.playquillDesktop?.openBackups?.();}
+    catch {setBackupMessage("Couldn't open the local backup folder.");}
+  };
   useEffect(() => {
     const escape = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
@@ -224,7 +279,7 @@ export default function GamingHQ() {
   useEffect(() => {
     let live = true;
     loadData().then(value => { if (live) { loadedRef.current = true; setData(value); setReady(true); } })
-      .catch(() => { if (live) { setLoadFailure("Your library could not be opened. No saved data has been overwritten. Restart Playquill to try again."); setSaveStatus("error"); } });
+      .catch(() => { if (live) { setLoadFailure("Your library could not be opened. Your saved file is unchanged. Open Preferences to restore a JSON backup."); setSaveStatus("error"); } });
     return () => { live = false; };
   }, []);
   useEffect(() => {
@@ -602,11 +657,15 @@ export default function GamingHQ() {
   };
   const importBackup = async (file: File) => {
     try {
-      if (file.size > 25_000_000) throw new Error("Backup file is too large.");
+      if (file.size > 30*1024*1024) throw new Error("Backup file is too large.");
       const imported=validateImport(JSON.parse(await file.text()));
       if (!window.confirm("REPLACE this device's Playquill library with the imported backup? Export your current library first. This cannot be undone.")) return;
-      await saveData(imported);
+      await saveData(imported, true);
+      currentDataRef.current = imported;
+      loadedRef.current = true;
       setData(imported);
+      setLoadFailure("");
+      setReady(true);
       setBackupMessage("Backup imported successfully.");
       go("/");
     } catch(e) {
@@ -671,7 +730,7 @@ export default function GamingHQ() {
 
   function CategoryRow({ category, index, length }: { category: Category; index: number; length: number }) {
     return (
-      <div className="side-category">
+      <div className="side-category" style={categoryAccent(category.color)}>
         <DropTarget id={"target-category/"+category.id} data={{kind:"category-target",categoryId:category.id}}>
           <button className={"side-category-label " + (currentId===category.id?"active":"")}
             onClick={()=>go("/category/"+category.id)} title={category.name}>
@@ -734,7 +793,7 @@ export default function GamingHQ() {
       <div className="category-grid">{dashboardCategories.map(c=>{
         const games=gamesIn(c.id), top=games.slice(0,4);
         return <SortableItem id={"category/"+c.id} data={{kind:"category",categoryId:c.id}} key={c.id}>
-          <Link className="category-preview" href={"/category/"+c.id} style={{"--category-accent":c.color} as React.CSSProperties}>
+          <Link className="category-preview" href={"/category/"+c.id} style={categoryAccent(c.color)}>
           <div className="category-head">
             <span className="category-icon" style={{color:c.color,background:c.color+"18"}}><LabelIcon name={c.icon}/></span>
             <div><h2>{c.name}</h2><div className="muted small">{games.length} {games.length===1?"game":"games"}</div></div>
@@ -827,7 +886,7 @@ export default function GamingHQ() {
         </div>
         {shelfCategories(s.id).map(c=><DragItem key={c.id} id={"shelf-category/"+c.id}
           data={{kind:"category",categoryId:c.id}}>
-          <Link className="shelf-category" href={"/category/"+c.id}><LabelIcon name={c.icon}/><span>{c.name}</span><ChevronRight size={16}/></Link>
+          <Link className="shelf-category" href={"/category/"+c.id} style={categoryAccent(c.color)}><LabelIcon name={c.icon}/><span>{c.name}</span><ChevronRight size={16}/></Link>
         </DragItem>)}
         {!shelfCategories(s.id).length&&<p className="muted small">Drop categories here.</p>}
       </div></DropTarget>)}</div>}
@@ -836,7 +895,7 @@ export default function GamingHQ() {
 
   function CategoryScreen({ category }: { category: Category }) {
     const games=gamesIn(category.id);
-    return <div className="screen">
+    return <div className="screen category-screen" style={categoryAccent(category.color)}>
       <div className="breadcrumbs"><Link href="/">Dashboard</Link><ChevronRight size={14}/><span>{category.name}</span></div>
       <div className="page-top"><div className="category-title"><span className="title-icon" style={{color:category.color,background:category.color+"18"}}><LabelIcon name={category.icon} size={26}/></span>
         <div><h1>{category.name}<span className="dot">.</span></h1><p className="subline">{games.length} {games.length===1?"game":"games"} · Your order</p></div></div>
@@ -1062,7 +1121,7 @@ export default function GamingHQ() {
               {!data.shelves.length&&<span className="muted small">Create a Shelf first to move categories here.</span>}
             </div>}
       </nav>
-      <div className="sidebar-bottom"><div className="local-badge" role="status" title={saveStatus==="error"?"Could not save. Export a backup.":saveStatus==="saving"?"Saving changes":"Saved locally"}><span className={"local-dot "+saveStatus}/>{sidebarOpen&&<span>{saveStatus==="error"?"Could not save":saveStatus==="saving"?"Saving…":"Saved locally"}</span>}</div><button className="icon-button" title="Preferences" aria-label="Preferences" onClick={()=>{setModal(null);setShowPreferences(true);setBackupMessage("");}}><Settings2 size={17}/></button></div>
+      <div className="sidebar-bottom"><div className="local-badge" role="status" title={saveStatus==="error"?"Could not save. Export a backup.":saveStatus==="saving"?"Saving changes":"Saved locally"}><span className={"local-dot "+saveStatus}/>{sidebarOpen&&<span>{saveStatus==="error"?"Could not save":saveStatus==="saving"?"Saving…":"Saved locally"}</span>}</div><button className={"icon-button preference-button"+(updateInfo?.available?" update-ready":"")} title={updateInfo?.available?"Preferences · Update available":"Preferences"} aria-label={updateInfo?.available?"Preferences, update available":"Preferences"} onClick={()=>{setModal(null);setShowPreferences(true);setBackupMessage("");}}><Settings2 size={17}/></button></div>
     </aside>
     {mobileMenu&&<button className="mobile-overlay" aria-label="Close navigation" onClick={()=>setMobileMenu(false)}/>}
     <div className="main-shell" inert={!!modal||showPreferences}>
@@ -1101,6 +1160,7 @@ export default function GamingHQ() {
           <button className="secondary" onClick={()=>gamesInputRef.current?.click()}>Import games only (JSON)</button>
 
           <button className="secondary" onClick={exportBackup}>Download JSON backup</button>
+          {(ready||!!loadFailure)&&typeof window!=="undefined"&&window.playquillDesktop?.openBackups&&<button className="secondary" onClick={()=>void openLocalBackups()}>Open local backups</button>}
           <input ref={backupInputRef} type="file" accept=".json,application/json" className="hidden-backup-input"
             onChange={e=>{const file=e.currentTarget.files?.[0];if(file)void importBackup(file);}}/>
           <button className="secondary" onClick={()=>backupInputRef.current?.click()}>Import backup (replace this library)</button>
@@ -1112,6 +1172,18 @@ export default function GamingHQ() {
             setLibrarySelected([]);
             setBackupMessage("Cloud library restored locally. Export a new backup if you wish.");
           }}/></details>
+          {ready&&typeof window!=="undefined"&&window.playquillDesktop?.checkUpdate&&<>
+            <div className="dialog-separator"/>
+            <div className="desktop-update-row">
+              <span className="muted small">Playquill {updateInfo?.current||"0.4.0"}</span>
+              <button className="secondary small-button" disabled={updateBusy||updateStage!=="idle"} onClick={()=>void checkUpdate()}>{updateBusy?"Checking…":"Check for updates"}</button>
+            </div>
+            {updateStage==="downloading"?<div className="desktop-update-progress" role="status"><span>Downloading update · {updatePercent}%</span><progress aria-label="Update download" max={100} value={updatePercent}/></div>:
+              updateStage==="ready"||updateStage==="installing"?<button className="primary" disabled={updateStage==="installing"} onClick={()=>void installDesktopUpdate()}>{updateStage==="installing"?"Opening setup…":"Install "+updateVersion}</button>:
+              updateInfo?.available?<button className="secondary" onClick={()=>void downloadDesktopUpdate()}>Update to {updateInfo.latest}</button>:
+              updateChecked&&!updateBusy&&<p className="muted small" role="status">{updateInfo?.error||(updateInfo?.latest?"You're up to date.":"No update found.")}</p>}
+            {updateError&&<p className="muted small" role="alert">{updateError}</p>}
+          </>}
         </div>
       </div>
     </div>

@@ -6,8 +6,8 @@ Playquill is a personal game library and journal with a **real desktop app** bui
 
 The Windows CI workflow builds two artifacts from the same verified source:
 
-- **Playquill-Setup-0.3.0-x64.exe** — Windows installer (recommended), with Start Menu/Desktop shortcuts and normal removal through Windows Settings.
-- **Playquill-Portable-0.3.0-x64.exe** — standalone portable executable without an installer.
+- **Playquill-Setup-0.4.0-x64.exe** — Windows installer (recommended), with Start Menu/Desktop shortcuts and normal removal through Windows Settings.
+- **Playquill-Portable-0.4.0-x64.exe** — standalone portable executable without an installer.
 
 Download the `Playquill-Windows-x64-verified` artifact from the successful **Build and verify Playquill for Windows** GitHub Actions run. Both files are unsigned developer builds. Windows SmartScreen may show a warning; inspect the official build source before choosing to proceed.
 
@@ -52,7 +52,7 @@ Export a JSON backup before switching from browser to desktop or between version
 - The bundled Next.js server listens **only on 127.0.0.1** on a dynamically chosen port; it does not rely on a running Vercel tab.
 - Only one Electron instance runs at a time.
 - Node.js integration is disabled in the renderer, context isolation is enabled, and untrusted external URLs open in the system browser.
-- No remote auto-updater or telemetry is included.
+- No telemetry is included. Update checks and user-requested downloads use only the official GitHub release repository.
 - The cloud account uses public client credentials and private per-user data; Google OAuth and end-to-end cloud testing may require additional configuration and are **not** guaranteed by the desktop smoke test.
 - Do not merge, replace production, or mark a public release stable until Windows smoke tests and user acceptance pass.
 
@@ -66,3 +66,11 @@ Export a JSON backup before switching from browser to desktop or between version
 - Maintain compact, readable typography and consistent spacing. Keep keyboard-accessible controls and explicit focus feedback.
 - Loading, failures, and successful operations should be communicated unobtrusively, without blocking unrelated work.
 - Do not remove useful capabilities simply to achieve a cleaner appearance; preserve them behind an appropriate progressive-disclosure interaction.
+
+## Playquill 0.4 — recovery and releases
+
+- Category colors tint the dashboard cards, bookmark accents, selected navigation and category heading/actions. The artwork and global theme remain unchanged.
+- Native saves keep the previous good library (`backups/previous.json`) and up to 14 dated snapshots in the existing app-data folder. Use **Preferences → Open local backups**, then **Import backup** and select a JSON file if you need to restore. An explicitly restored backup can replace a damaged library; the damaged original is copied into the backup folder first. Never delete the app-data directory when upgrading. Backups on the same disk do not protect against drive loss; keep an occasional separate export.
+- Packaged desktop builds check the official repository for stable updates on startup. A small indicator beside Preferences appears only if a newer installer exists. Choose **Update to version** in Preferences to download directly in Playquill, then **Install**. Playquill verifies the official GitHub asset SHA-256 digest, creates a pre-update library backup, and opens the Windows installer after explicit approval. No browser or manual download is required. The installer remains interactive and unsigned; Windows security prompts still apply. The portable edition does not update itself; use Setup for in-app updates.
+- Version changes merged to main trigger the Windows build. After packaged renderer/save/backup smoke tests pass, a separate job publishes the versioned Setup and Portable EXEs with SHA-256 checksums at https://github.com/linevs8/gamingcatalog/releases. An existing release is never replaced. To retry a missing release, run the Windows workflow on main with `publish_release` enabled.
+- These are unsigned developer builds. Neither the release check nor the checksums replace Authenticode publisher verification. The in-app updater requires the GitHub API asset digest, rejects downgrades/prereleases, and does not bypass Windows security. Its automated tests cover download validation, redirect restrictions and tampering; installation of a real newer release still needs acceptance testing. Visual appearance, update notification behavior and real IGDB results still require hands-on testing.
