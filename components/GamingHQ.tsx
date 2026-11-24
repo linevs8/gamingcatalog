@@ -93,6 +93,10 @@ export default function GamingHQ() {
   const [coverProgress, setCoverProgress] = useState("");
   const [coverBusy, setCoverBusy] = useState(false);
   const [libraryCollapsed, setLibraryCollapsed] = useState(false);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [libraryMenuOpen, setLibraryMenuOpen] = useState(false);
+  const catalogInputRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const [librarySelected, setLibrarySelected] = useState<string[]>([]);
   const [showDeletedNotes,setShowDeletedNotes]=useState(false);
   const [targetCategory, setTargetCategory] = useState("");
@@ -120,41 +124,60 @@ export default function GamingHQ() {
   const gamesInputRef = useRef<HTMLInputElement>(null);
   const [showPreferences,setShowPreferences] = useState(false);
   const [backupMessage,setBackupMessage] = useState("");
-  useEffect(()=>{
-    if(modal?.type!=="catalog"||catalogQuery.trim().length<2){
-      setCatalogResults([]);setCatalogBusy(false);setCatalogError("");return;
-    }
-    const ctrl=new AbortController();
-    const t=window.setTimeout(async ()=>{
-      setCatalogBusy(true);setCatalogError("");
-      const q=encodeURIComponent(catalogQuery.trim());
-      const [db,igdb]=await Promise.allSettled([
-        fetch("/api/catalog?q="+q,{signal:ctrl.signal}).then(async r=>{
-          const j=await r.json();if(!r.ok)throw Error(j.error||"Search failed");
-          return (j.results||[]) as CatalogGame[];
-        }),
-        fetch("/api/igdb/search?q="+q,{signal:ctrl.signal}).then(async r=>{
-          const j=await r.json();
-          if(!r.ok)throw Error(j.error||"IGDB search unavailable");
-          if(!Array.isArray(j.games))throw Error("Invalid IGDB response");
-          return j.games.map((v:{providerId:number,title:string,subtitle?:string,coverUrl?:string})=>({
-            id:"igdb:"+v.providerId,title:v.title,subtitle:v.subtitle||"",
-            coverUrl:v.coverUrl||"",source:"IGDB",platforms:[]
-          })) as CatalogGame[];
-        })
-      ]);
-      if(ctrl.signal.aborted)return;
-      const found=new Map<string,CatalogGame>();
-      for(const result of [db,igdb])if(result.status==="fulfilled")
-        for(const game of result.value)if(!found.has(game.id))found.set(game.id,game);
-      setCatalogResults([...found.values()]);
-      if(!found.size && db.status==="rejected" && igdb.status==="rejected")
-        setCatalogError("Search services unavailable: " + String(igdb.reason instanceof Error ? igdb.reason.message : "network error") + ". You can add manually.");
-      else if(!found.size && db.status==="rejected") setCatalogError("GameDB unavailable; IGDB returned no matches.");
-      else if(!found.size && igdb.status==="rejected") setCatalogError("IGDB unavailable: " + String(igdb.reason instanceof Error ? igdb.reason.message : "network error"));
-      setCatalogBusy(false);
-    },350);
-    return ()=>{window.clearTimeout(t);ctrl.abort();};
+  useEffect(() => {
+    const escape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      if (modal) setModal(null);
+      else if (showPreferences) setShowPreferences(false);
+      else setLibraryMenuOpen(false);
+    };
+    window.addEventListener("keydown", escape);
+    return () => window.removeEventListener("keydown", escape);
+  }, [modal, showPreferences]);
+  useEffect(() => {
+    if (!modal) return;
+    const frame = requestAnimationFrame(() => {
+      const input = modal.type === "catalog" ? catalogInputRef.current :
+        dialogRef.current?.querySelector<HTMLElement>('input:not([type="checkbox"]), select');
+      input?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [modal?.type, modal?.gameId, modal?.categoryId]);
+  useEffect(() => { setLibraryMenuOpen(false); setSelectionMode(false); setLibrarySelected([]); }, [pathname]);
+  useEffect(() => {
+    const q = encodeURIComponent(catalogQuery.trim());
+    setCatalogResults([]); setCatalogError(""); setCatalogBusy(false);
+    if (modal?.type !== "catalog" || catalogQuery.trim().length < 2) return;
+    const ctrl = new AbortController();
+    const t = window.setTimeout(async () => {
+      setCatalogBusy(true);
+      const request = async (url: string) => {
+        const response = await fetch(url, {signal: AbortSignal.any([ctrl.signal, AbortSignal.timeout(12000)]), cache:"no-store"});
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.error || "Search unavailable");
+        return body;
+      };
+      let failure = "";
+      try {
+        const body = await request("/api/igdb/search?q=" + q);
+        if (ctrl.signal.aborted) return;
+        if (Array.isArray(body.games) && body.games.length) {
+          setCatalogResults(body.games.map((v: {providerId:number;title:string;subtitle?:string;coverUrl?:string}) => ({
+            id:"igdb:"+v.providerId,title:v.title,subtitle:v.subtitle||"",coverUrl:v.coverUrl||"",source:"IGDB",platforms:[]
+          })));
+          setCatalogBusy(false);
+          return;
+        }
+      } catch (error) { failure = error instanceof Error ? error.message : "IGDB unavailable"; }
+      if (ctrl.signal.aborted) return;
+      try {
+        const body = await request("/api/catalog?q="+q);
+        if (!ctrl.signal.aborted) setCatalogResults(Array.isArray(body.results)?body.results:[]);
+      } catch {
+        if (!ctrl.signal.aborted) setCatalogError(failure || "Search unavailable. Try again or add manually.");
+      } finally { if (!ctrl.signal.aborted) setCatalogBusy(false); }
+    },250);
+    return () => { window.clearTimeout(t); ctrl.abort(); };
   },[modal?.type,catalogQuery]);
   const sensors=useSensors(
     useSensor(PointerSensor,{activationConstraint:{distance:5}}),
@@ -234,6 +257,9 @@ export default function GamingHQ() {
     .filter((g): g is Game => Boolean(g));
   const membershipsFor = (id: string) => data.memberships.filter(m => m.gameId === id);
   const openModal = (type: NonNullable<Modal>["type"], gameId?: string, categoryId?: string, linkId?:string) => {
+    setShowPreferences(false);
+    setLibraryMenuOpen(false);
+    setDragging(null);
     const existingGame=data.games.find(g=>g.id===gameId);
     const existingLink=data.links.find(l=>l.id===linkId);
     setName(type==="edit-game" ? existingGame?.title||"" : "");
@@ -691,14 +717,14 @@ export default function GamingHQ() {
 
   function Dashboard() {
     return <div className="screen dashboard-screen">
-      <div className="page-top"><div><h1>Dashboard<span className="dot">.</span></h1></div>
+      <div className="page-top"><div><h1>Dashboard</h1></div>
         <button className="primary" onClick={()=>openModal("category")}><Plus size={17}/> New category</button>
       </div>
       {!dashboardCategories.length ? <div className="blank-state">
         <div className="blank-symbol"><LayoutDashboard size={35}/></div>
         <h2>Make yourself at home.</h2>
         <p>Start with a category that makes sense to you. Priority, Story Games, Dailies — or something completely different.</p>
-        <button className="primary" onClick={()=>openModal("category")}><Plus size={17}/> Create your first category</button>
+        <button className="primary" onClick={()=>openModal("category")}><Plus size={17}/> Create category</button>
         <div className="muted small">Or <Link href="/library">add a game to your Library</Link> first.</div>
       </div> :
       <SortableContext items={dashboardCategories.map(c=>"category/"+c.id)} strategy={rectSortingStrategy}>
@@ -729,27 +755,32 @@ export default function GamingHQ() {
       <span>Page {safePage} of {totalPages}</span>
       <button className="secondary small-button" disabled={safePage===totalPages} onClick={()=>setLibraryPage(safePage+1)}>Next</button>
     </nav> : null;
-    return <div className="screen">
-      <div className="page-top"><div><div className="eyebrow">THE MASTER COLLECTION</div><h1>All Games<span className="dot">.</span></h1>
+    return <div className={"screen library-screen" + (selectionMode ? " selection-mode" : "")}>
+      <div className="page-top"><div><h1>All Games</h1>
         <p className="subline">Every game lives here, even when it appears in several categories.</p></div>
-        <button className="primary" onClick={()=>openModal("catalog")}><Plus size={17}/> Import games</button></div>
-      <div className="library-import-actions"><button className="secondary small-button" onClick={()=>gamesInputRef.current?.click()}>Import games from JSON</button><button className="secondary small-button" disabled={coverBusy || !data.games.some(g=>!g.coverUrl)} onClick={()=>void fillMissingCovers(data.games)}> {coverBusy?"Finding covers…":"Find missing covers"} </button>{coverProgress&&<span role="status" className="muted small">{coverProgress}</span>}{backupMessage&&<span role="status" className="muted small">{backupMessage}</span>}</div>
+        <div className="page-actions">
+          {data.games.length>0&&<button className="primary" onClick={()=>openModal("catalog")}><Plus size={17}/> Add games</button>}
+          <div className="library-menu-wrap">
+            <button type="button" className="icon-button library-menu-trigger" aria-label="Library actions" aria-expanded={libraryMenuOpen} title="Library actions" onClick={()=>setLibraryMenuOpen(v=>!v)}><MoreHorizontal size={21}/></button>
+            {libraryMenuOpen&&<><button className="menu-dismiss" aria-label="Close library actions" onClick={()=>setLibraryMenuOpen(false)}/><div className="library-menu">
+              <button onClick={()=>{setLibraryMenuOpen(false);gamesInputRef.current?.click();}}>Import games from JSON</button>
+              <button disabled={coverBusy||!data.games.some(g=>!g.coverUrl)} onClick={()=>{setLibraryMenuOpen(false);void fillMissingCovers(data.games);}}>Find missing covers</button>
+              <button disabled={!data.games.length} onClick={()=>{setLibraryMenuOpen(false);setLibraryCollapsed(false);setSelectionMode(true);}}>Select games</button>
+              <button disabled={!data.games.length} onClick={()=>{setLibraryMenuOpen(false);setLibraryCollapsed(v=>!v);}}>{libraryCollapsed?"Show library":"Hide library"}</button>
+            </div></>}
+          </div>
+        </div></div>
+
       <div className="library-toolbar">
         <label className="search"><Search size={18}/><input aria-label="Search your games" placeholder="Search your library…" value={query} onChange={e=>setQuery(e.target.value)}/></label>
         <div className="segment"><button className={libraryView==="gallery"?"selected":""} onClick={()=>setLibraryView("gallery")} title="Gallery view"><LayoutDashboard size={17}/></button>
           <button className={libraryView==="list"?"selected":""} onClick={()=>setLibraryView("list")} title="List view"><List size={17}/></button></div>
       </div>
-      <div className="library-extra-actions">
-        <button className="secondary small-button" onClick={()=>setLibraryCollapsed(v=>!v)} aria-expanded={!libraryCollapsed}>
-          {libraryCollapsed?<ChevronRight size={15}/>:<ChevronDown size={15}/>}
-          {libraryCollapsed?"Show":"Hide"} game library ({filtered.length})
-        </button>
-        {!libraryCollapsed && visible.length>0 && <button className="secondary small-button"
-          onClick={()=>setLibrarySelected(previous=>pageAllSelected?
-            previous.filter(id=>!visible.some(g=>g.id===id)):
-            [...new Set([...previous,...visible.map(g=>g.id)])])}>
-          {pageAllSelected?"Deselect page":"Select page"}
-        </button>}
+      {(coverBusy||coverProgress||backupMessage)&&<div className="library-status" role="status"><span>{coverBusy?coverProgress:coverProgress||backupMessage}</span>{!coverBusy&&<button className="icon-button" aria-label="Dismiss status" onClick={()=>{setCoverProgress("");setBackupMessage("");}}><X size={15}/></button>}</div>}
+      {selectionMode&&<div className="library-extra-actions">
+        <button className="secondary small-button" onClick={()=>{setSelectionMode(false);setLibrarySelected([]);}}>Done</button>
+        {!libraryCollapsed&&visible.length>0&&<button className="secondary small-button" onClick={()=>setLibrarySelected(previous=>pageAllSelected?
+          previous.filter(id=>!visible.some(g=>g.id===id)):[...new Set([...previous,...visible.map(g=>g.id)])])}>{pageAllSelected?"Deselect page":"Select page"}</button>}
         {!!librarySelected.length&&<div className="bulk-controls">
           <span>{librarySelected.length} selected</span>
           <select aria-label="Bulk category" value={targetCategory} onChange={e=>setTargetCategory(e.target.value)}>
@@ -760,17 +791,17 @@ export default function GamingHQ() {
           <button className="secondary small-button" onClick={()=>setLibrarySelected([])}>Clear selection</button>
           <button className="secondary small-button bulk-delete" onClick={bulkDeleteGames}>Delete selected…</button>
         </div>}
-      </div>
+      </div>}
       {!data.games.length?<div className="blank-state compact"><div className="blank-symbol"><Library size={30}/></div>
         <h2>Your library starts here.</h2><p>Import console, PC and browser games with cover art, or add your own.</p>
         <button className="primary" onClick={()=>openModal("catalog")}><Plus size={17}/> Import games</button>
-      </div>:libraryCollapsed?<p className="muted small">Library hidden. Expand to browse your games.</p>:!filtered.length?<div className="empty-search">No games match “{query}”.</div>:
+      </div>:libraryCollapsed?<button className="secondary small-button" onClick={()=>setLibraryCollapsed(false)}>Show library ({data.games.length})</button>:!filtered.length?<div className="empty-search">No games match “{query}”.</div>:
       <>{pagination}<div className={libraryView==="gallery"?"games-grid":"games-list"}>
         {visible.map(g=><DragItem key={g.id} id={"library-game/"+g.id} data={{kind:"game",categoryId:"library",gameId:g.id}}>
-          <div className="selectable-game"><label className="game-select" title={"Select "+g.title}>
+          <div className="selectable-game">{selectionMode&&<label className="game-select" title={"Select "+g.title}>
             <input type="checkbox" aria-label={"Select "+g.title} checked={librarySelected.includes(g.id)}
               onChange={e=>setLibrarySelected(prev=>e.target.checked?[...prev,g.id]:prev.filter(id=>id!==g.id))}/>
-          </label>{GameCard({game:g,list:libraryView==="list",organize:true})}</div>
+          </label>}{GameCard({game:g,list:libraryView==="list",organize:true})}</div>
         </DragItem>)}
       </div>{pagination}</>}
     </div>;
@@ -970,7 +1001,7 @@ export default function GamingHQ() {
       onDragStart={handleDragStart} onDragEnd={handleDragEnd}
       onDragCancel={()=>setDragging(null)}>
     <div className={"app-shell theme-"+(data.theme||"midnight")}>
-    <aside className={"sidebar "+(!sidebarOpen?"collapsed ":"")+(mobileMenu?"mobile-open":"")}>
+    <aside inert={!!modal||showPreferences} className={"sidebar "+(!sidebarOpen?"collapsed ":"")+(mobileMenu?"mobile-open":"")}>
       <div className="brand">
         {sidebarOpen ? (
           <>
@@ -1028,16 +1059,15 @@ export default function GamingHQ() {
               {!data.shelves.length&&<span className="muted small">Create a Shelf first to move categories here.</span>}
             </div>}
       </nav>
-      <div className="sidebar-bottom"><div className="local-badge"><span className="local-dot"/>{sidebarOpen&&<span>{saveStatus==="error"?"Saving error":"Guest mode · Local only"}</span>}</div></div>
+      <div className="sidebar-bottom"><div className="local-badge" role="status" title={saveStatus==="error"?"Could not save. Export a backup.":saveStatus==="saving"?"Saving changes":"Saved locally"}><span className={"local-dot "+saveStatus}/>{sidebarOpen&&<span>{saveStatus==="error"?"Could not save":saveStatus==="saving"?"Saving…":"Saved locally"}</span>}</div><button className="icon-button" title="Preferences" aria-label="Preferences" onClick={()=>{setModal(null);setShowPreferences(true);setBackupMessage("");}}><Settings2 size={17}/></button></div>
     </aside>
     {mobileMenu&&<button className="mobile-overlay" aria-label="Close navigation" onClick={()=>setMobileMenu(false)}/>}
-    <div className="main-shell">
+    <div className="main-shell" inert={!!modal||showPreferences}>
       <header className="topbar"><div className="topbar-left"><button className="icon-button mobile-toggle" onClick={()=>{setSidebarOpen(true);setMobileMenu(v=>!v);}} aria-label="Open navigation"><Menu size={20}/></button>
         <button className="icon-button" aria-label="Back" title="Back" onClick={()=>router.back()}><ArrowLeft size={19}/></button>
         <button className="icon-button" aria-label="Forward" title="Forward" onClick={()=>router.forward()}><ArrowRight size={19}/></button>
         </div>
-        <div className="topbar-right"><span className="guest-chip"><Cloud size={14}/> Guest workspace</span><button className="icon-button" title="Appearance and backups" aria-label="Appearance and backups"
-          onClick={()=>{setShowPreferences(true);setBackupMessage("");}}><Settings2 size={18}/></button></div>
+
       </header>
       <main className="main-content">{!ready?<div className="loading"><span className="pulse-dot"/> Opening your space…</div>:
         section==="dashboard"?Dashboard():section==="library"?LibraryScreen():section==="shelves"?ShelvesScreen():
@@ -1046,12 +1076,12 @@ export default function GamingHQ() {
         <div className="blank-state"><h2>Couldn't find that page.</h2><button className="primary" onClick={()=>go("/")}>Back to dashboard</button></div>}
       </main>
     </div>
-    <div className="modal-backdrop" hidden={!showPreferences} onMouseDown={e=>{if(e.target===e.currentTarget)setShowPreferences(false);}}>
+    <div className="modal-backdrop" hidden={!showPreferences||!!modal} onMouseDown={e=>{if(e.target===e.currentTarget)setShowPreferences(false);}}>
       <div className="dialog preferences-dialog" role="dialog" aria-modal={showPreferences} aria-label="Playquill preferences">
         <div className="dialog-head"><h2>Preferences</h2>
           <button className="icon-button" aria-label="Close preferences" onClick={()=>setShowPreferences(false)}><X size={20}/></button></div>
         <div className="dialog-fields">
-          <div><div className="setting-caption">APPEARANCE</div><p className="muted small">Choose your home base's look.</p></div>
+          <div className="setting-caption">Appearance</div>
           <div className="theme-grid">
             {([["midnight","Midnight Blue"],["obsidian","Obsidian"],["violet","Dusk Violet"],["teal","Deep Teal"]] as [ThemeName,string][]).map(([id,label])=>
               <button className={"theme-choice theme-preview-"+id+((data.theme||"midnight")===id?" chosen":"")}
@@ -1061,36 +1091,34 @@ export default function GamingHQ() {
               </button>)}
           </div>
           <div className="dialog-separator"/>
-          <div><div className="setting-caption">DATA & BACKUPS</div><p className="muted small">Local autosaving remains active. Cloud backup is optional and only runs after you enable it. Export regularly and before switching preview URLs.</p></div>
+          <div className="setting-caption">Library & backups</div>
           <input ref={gamesInputRef} type="file" accept=".json,application/json" className="hidden-backup-input"
             onChange={e=>{const file=e.currentTarget.files?.[0];if(file)void importGamesOnly(file);}}/>
           <button className="secondary" onClick={()=>gamesInputRef.current?.click()}>Import games only (JSON)</button>
-          <p className="muted small">Adds new titles to All Games; skips duplicates and leaves your categories, notes, and sorting untouched.</p>
+
           <button className="secondary" onClick={exportBackup}>Download JSON backup</button>
           <input ref={backupInputRef} type="file" accept=".json,application/json" className="hidden-backup-input"
             onChange={e=>{const file=e.currentTarget.files?.[0];if(file)void importBackup(file);}}/>
           <button className="secondary" onClick={()=>backupInputRef.current?.click()}>Import backup (replace this library)</button>
           {backupMessage&&<p role="status" className="muted small">{backupMessage}</p>}
           <div className="dialog-separator"/>
-          <CloudPanel localData={data} localSaveStatus={saveStatus} onRestore={async imported=>{
+          <details className="preferences-advanced"><summary>Cloud backup</summary><CloudPanel localData={data} localSaveStatus={saveStatus} onRestore={async imported=>{
             await saveData(imported);
             setData(imported);
             setLibrarySelected([]);
             setBackupMessage("Cloud library restored locally. Export a new backup if you wish.");
-          }}/>
+          }}/></details>
         </div>
-        <div className="dialog-footer"><button className="primary" onClick={()=>setShowPreferences(false)}>Done</button></div>
       </div>
     </div>
-    {modal&&<div className="modal-backdrop" onMouseDown={e=>{if(e.target===e.currentTarget)setModal(null)}}>
-      <div className="dialog" role="dialog" aria-modal="true" aria-label={modal.type==="organize"?"Organize game":"Add new item"}>
+    {modal&&<div className="modal-backdrop" onPointerDown={e=>e.stopPropagation()} onMouseDown={e=>{if(e.target===e.currentTarget)setModal(null)}}>
+      <div key={modal.type} ref={dialogRef} className="dialog" role="dialog" aria-modal="true" aria-label={modal.type==="catalog"?"Add games":modal.type==="organize"?"Organize game":"Add new item"}>
         <div className="dialog-head"><h2>{modal.type==="catalog"?"Import games":modal.type==="game"?"Add a game":modal.type==="edit-game"?"Edit game":
           modal.type==="category"?"New category":modal.type==="shelf"?"New shelf":
           modal.type==="link"?"Add quick link":modal.type==="edit-link"?"Edit quick link":
           modal.type==="pick-library"?"Add from Library":"Organize game"}</h2><button className="icon-button" title="Close" onClick={()=>setModal(null)}><X size={20}/></button></div>
         {modal.type==="catalog"&&<div className="dialog-fields">
-          <label>Search cross-platform games<input autoFocus value={catalogQuery} onChange={e=>setCatalogQuery(e.target.value)}
-            placeholder="Pokémon, Tekken Tag 2, Pokémon Showdown…"/></label>
+          <label>Search games<input ref={catalogInputRef} type="search" autoFocus autoComplete="off" spellCheck={false} value={catalogQuery} onPointerDown={e=>e.stopPropagation()} onClick={e=>e.currentTarget.focus()} onChange={e=>setCatalogQuery(e.target.value)} placeholder="Search by title…"/></label>
           {catalogBusy&&<p role="status" className="muted small">Searching game catalog…</p>}
           {catalogError&&<p role="alert" className="field-error">{catalogError}</p>}
           <div className="catalog-results">
@@ -1101,10 +1129,10 @@ export default function GamingHQ() {
             </button>)}
           </div>
           {!catalogBusy&&catalogQuery.trim().length>=2&&!catalogResults.length&&!catalogError&&<p className="muted small">No results. Try another spelling or add manually.</p>}
-          <button type="button" className="primary" onClick={()=>openModal("game",undefined,modal.categoryId)}>
+          <button type="button" className="secondary" onClick={()=>openModal("game",undefined,modal.categoryId)}>
             <Plus size={16}/> Add a game manually
           </button>
-          <p className="muted small">Covers can be changed later.</p>
+
         </div>}
         {(modal.type==="game"||modal.type==="edit-game")&&<div className="dialog-fields">
           <label>Game title<input autoFocus value={name} onChange={e=>setName(e.target.value)} placeholder="Game title"/></label>
