@@ -1,6 +1,6 @@
 // Playquill native Windows shell. Next.js runs in an Electron utility
 // process, not by launching the portable .exe again as in the original build.
-const { app, BrowserWindow, dialog, shell, utilityProcess, ipcMain } = require("electron");
+const { app, BrowserWindow, dialog, shell, utilityProcess, ipcMain, screen } = require("electron");
 const fs = require("node:fs");
 const net = require("node:net");
 const http = require("node:http");
@@ -198,14 +198,27 @@ function startServer(port) {
   });
 }
 function createWindow() {
+  let geometry = {};
+  try {
+    const state = JSON.parse(fs.readFileSync(path.join(app.getPath("userData"),"window-state.json"),"utf8"));
+    const b = state.bounds;
+    if (b && [b.x,b.y,b.width,b.height].every(Number.isFinite) && b.width >= 900 && b.height >= 620 && b.width <= 10000 && b.height <= 10000) {
+      const visible = screen.getAllDisplays().some(d => {
+        const a = d.workArea;
+        return Math.min(a.x+a.width,b.x+b.width)-Math.max(a.x,b.x)>100 && Math.min(a.y+a.height,b.y+b.height)-Math.max(a.y,b.y)>100;
+      });
+      if (visible) geometry = {...b, maximized: state.maximized === true};
+    }
+  } catch { /* First launch or an outdated monitor arrangement. */ }
   mainWindow = new BrowserWindow({
     title: "Playquill",
-    width: 1440,
-    height: 900,
+    width: geometry.width || 1440,
+    height: geometry.height || 900,
+    ...(geometry.x === undefined ? {} : {x:geometry.x,y:geometry.y}),
     minWidth: 900,
     minHeight: 620,
     show: false,
-    center: true,
+    center: geometry.x === undefined,
     backgroundColor: "#0c0e11",
     autoHideMenuBar: true,
     titleBarStyle: "default",
@@ -222,6 +235,7 @@ function createWindow() {
   const show = () => {
     if (shown || !mainWindow || mainWindow.isDestroyed()) return;
     shown = true;
+    if (geometry.maximized) mainWindow.maximize();
     mainWindow.show();
   };
   mainWindow.once("ready-to-show", show);
@@ -241,6 +255,11 @@ function createWindow() {
   });
   mainWindow.on("focus", () => {
     if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isFocused()) mainWindow.webContents.focus();
+  });
+  mainWindow.on("close", () => {
+    if (!mainWindow || mainWindow.isDestroyed() || smokeMode) return;
+    try { fs.writeFileSync(path.join(app.getPath("userData"),"window-state.json"),JSON.stringify({bounds:mainWindow.getNormalBounds(),maximized:mainWindow.isMaximized()})); }
+    catch (error) { log("Could not save window size: " + error); }
   });
   mainWindow.on("closed", () => { mainWindow = null; });
   return mainWindow.loadURL(homeURL + "/");
