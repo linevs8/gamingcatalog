@@ -82,3 +82,9 @@ html body .app-shell .history-action { font-size:11px; }
   html body .app-shell .topbar { padding:0 12px; }
   html body .app-shell .games-grid { grid-template-columns:repeat(auto-fill,minmax(112px,1fr)); gap:17px 11px; }
 }
+
+/* Results can grow without moving the search field under the pointer. */
+html body .app-shell .catalog-backdrop { align-items:start; padding-top:clamp(20px, 12vh, 105px); }
+html body .app-shell .catalog-dialog { max-height:calc(88vh - 28px); }
+html body .app-shell .catalog-dialog .dialog-fields { min-width:0; }
+html body .app-shell .catalog-dialog .catalog-results { min-height:0; overflow-y:auto; overscroll-behavior:contain; }
