@@ -26,6 +26,10 @@ export type Membership = { categoryId: string; gameId: string; order: number };
 export type QuickLink = { id: string; gameId: string; title: string; url: string; order: number };
 export type NotePage = { id: string; title: string; content: string; order: number };
 export type NoteRevision = { id: string; content: string; createdAt: number };
+export type DashboardSize = "compact" | "medium" | "large";
+export function dashboardSize(value: unknown): DashboardSize {
+  return value === "compact" || value === "medium" || value === "large" ? value : "large";
+}
 export type ThemeName = "midnight" | "obsidian" | "violet" | "teal";
 export type Data = {
   version: 1;
@@ -41,6 +45,7 @@ export type Data = {
   /** Soft-deleted note pages may be restored instead of being destroyed. */
   deletedNotePages?: Record<string, (NotePage & {deletedAt: number})[]>;
   theme?: ThemeName;
+  dashboardSize?: DashboardSize;
   links: QuickLink[];
 };
 export const emptyData = (): Data => ({
@@ -223,6 +228,7 @@ export function validateImport(raw: unknown): Data {
     ...emptyData(), ...d,
     noteTitles: d.noteTitles || {}, notePages: d.notePages || {}, noteRevisions: d.noteRevisions || {},
     deletedNotePages: d.deletedNotePages || {},
+    dashboardSize: dashboardSize(d.dashboardSize),
     theme: ["midnight","obsidian","violet","teal"].includes(d.theme || "") ? d.theme : "midnight"
   } as Data;
 }
