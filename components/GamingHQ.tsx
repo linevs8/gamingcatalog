@@ -272,12 +272,13 @@ export default function GamingHQ() {
   };
   const importCatalogGame = (entry: CatalogGame) => {
     const igdbId=Number(entry.id.replace(/^(gamedb|igdb):/,""));
-    const existing = data.games.find(g=>g.catalogId===entry.id || (g.provider==="igdb"&&g.providerId===igdbId));
+    const directIgdb = entry.id.startsWith("igdb:");
+    const existing = data.games.find(g=>g.catalogId===entry.id || (directIgdb && g.provider==="igdb" && g.providerId===igdbId));
     if (existing) {
       if (modal?.categoryId) toggleMembership(existing.id,modal.categoryId,true);
       setModal(null); return;
     }
-    const game: Game = {id:makeId(),catalogId:entry.id,provider:"igdb",providerId:igdbId,
+    const game: Game = {id:makeId(),catalogId:entry.id,...(directIgdb ? {provider:"igdb" as const,providerId:igdbId} : {}),
       title:entry.title,subtitle:entry.subtitle,coverUrl:entry.coverUrl,
       createdAt:Date.now()};
     change(d=>({...d,games:[...d.games,game],memberships:modal?.categoryId && d.categories.some(c=>c.id===modal.categoryId)?
@@ -1096,7 +1097,7 @@ export default function GamingHQ() {
             {catalogResults.map(entry=><button className="catalog-result" key={entry.id} onClick={()=>importCatalogGame(entry)}>
               {entry.coverUrl?<img src={entry.coverUrl} alt="" loading="lazy"/>:<div className="catalog-cover-fallback"><Gamepad2/></div>}
               <span><strong>{entry.title}</strong><small>{entry.subtitle||"Unspecified platform"}</small></span>
-              {data.games.some(g=>g.catalogId===entry.id || (g.provider==="igdb"&&g.providerId===Number(entry.id.replace(/^(gamedb|igdb):/,""))))?<span className="muted small">In library</span>:<Plus size={16}/>}
+              {data.games.some(g=>g.catalogId===entry.id || (entry.id.startsWith("igdb:") && g.provider==="igdb" && g.providerId===Number(entry.id.replace(/^igdb:/,""))))?<span className="muted small">In library</span>:<Plus size={16}/>}
             </button>)}
           </div>
           {!catalogBusy&&catalogQuery.trim().length>=2&&!catalogResults.length&&!catalogError&&<p className="muted small">No results. Try another spelling or add manually.</p>}
