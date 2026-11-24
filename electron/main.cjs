@@ -51,7 +51,7 @@ function loadNativeLibrary(event) {
     throw error;
   }
 }
-function saveNativeLibrary(event, data) {
+function saveNativeLibrary(event, data, allowRepair = false) {
   if (!validSender(event)) throw new Error("Untrusted Playquill data request");
   if (!data || data.version !== 1 || !Array.isArray(data.games) || !Array.isArray(data.categories)) {
     throw new Error("Invalid Playquill library payload");
@@ -63,7 +63,14 @@ function saveNativeLibrary(event, data) {
   let previous = null;
   try { previous = fs.readFileSync(filename,"utf8"); } catch(error) { if(error.code !== "ENOENT") throw error; }
   if (previous === serialized) return true;
-  if (previous !== null && !validSnapshot(previous)) throw new Error("Existing library is damaged; preserve it before restoring a backup");
+  if (previous !== null && !validSnapshot(previous)) {
+    if (!allowRepair) throw new Error("Existing library is damaged; restore a backup from Preferences");
+    const folder = path.join(app.getPath("userData"),"backups");
+    fs.mkdirSync(folder,{recursive:true});
+    // Keep the damaged original intact for possible recovery, then restore explicitly.
+    fs.copyFileSync(filename,path.join(folder,"damaged-"+Date.now()+".json"),fs.constants.COPYFILE_EXCL);
+    previous = null;
+  }
   // Capture a recoverable version before replacing a valid saved library.
   try {
     if (previous !== null) {
@@ -133,6 +140,7 @@ ipcMain.handle("playquill:open-backups", async event => {
 });
 ipcMain.handle("playquill:load", event => loadNativeLibrary(event));
 ipcMain.handle("playquill:save", (event, data) => saveNativeLibrary(event, data));
+ipcMain.handle("playquill:restore", (event, data) => saveNativeLibrary(event, data, true));
 // Synchronous flush guards against closing within the autosave debounce window.
 ipcMain.on("playquill:save-sync", (event, data) => {
   try { event.returnValue = saveNativeLibrary(event, data); }
