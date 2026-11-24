@@ -132,6 +132,36 @@ export default function GamingHQ() {
   const [updateInfo,setUpdateInfo] = useState<{current:string;available:boolean;latest:string|null;error:string|null}|null>(null);
   const [updateBusy,setUpdateBusy] = useState(false);
   const [updateChecked,setUpdateChecked] = useState(false);
+  const [updateStage,setUpdateStage] = useState<"idle"|"downloading"|"ready"|"installing">("idle");
+  const [updatePercent,setUpdatePercent] = useState(0);
+  const [updateVersion,setUpdateVersion] = useState("");
+  const [updateError,setUpdateError] = useState("");
+  useEffect(() => {
+    return window.playquillDesktop?.onUpdateProgress?.(setUpdatePercent);
+  }, []);
+  const downloadDesktopUpdate = async () => {
+    if (!window.playquillDesktop?.downloadUpdate || updateStage!=="idle") return;
+    setUpdateError("");setUpdatePercent(0);setUpdateStage("downloading");
+    try {
+      const result=await window.playquillDesktop.downloadUpdate();
+      setUpdateVersion(result.latest);setUpdateStage("ready");
+    } catch(error) {
+      setUpdateError(error instanceof Error?error.message:"Update download failed. Try again.");
+      setUpdateStage("idle");
+    }
+  };
+  const installDesktopUpdate = async () => {
+    if (!window.playquillDesktop?.installUpdate || updateStage!=="ready") return;
+    setUpdateStage("installing");setUpdateError("");
+    try {
+      await saveData(currentDataRef.current);
+      const launched=await window.playquillDesktop.installUpdate();
+      if (!launched) setUpdateStage("ready");
+    } catch(error) {
+      setUpdateError(error instanceof Error?error.message:"Update installation failed.");
+      setUpdateStage("idle");
+    }
+  };
   useEffect(() => {
     if (!ready || !window.playquillDesktop?.checkUpdate) return;
     let active = true;
@@ -1146,10 +1176,13 @@ export default function GamingHQ() {
             <div className="dialog-separator"/>
             <div className="desktop-update-row">
               <span className="muted small">Playquill {updateInfo?.current||"0.4.0"}</span>
-              <button className="secondary small-button" disabled={updateBusy} onClick={()=>void checkUpdate()}>{updateBusy?"Checking…":"Check for updates"}</button>
+              <button className="secondary small-button" disabled={updateBusy||updateStage!=="idle"} onClick={()=>void checkUpdate()}>{updateBusy?"Checking…":"Check for updates"}</button>
             </div>
-            {updateInfo?.available?<button className="secondary" onClick={()=>void window.playquillDesktop?.openReleases?.().catch(()=>setBackupMessage("Couldn't open releases."))}>Download {updateInfo.latest}</button>:
+            {updateStage==="downloading"?<div className="desktop-update-progress" role="status"><span>Downloading update · {updatePercent}%</span><progress aria-label="Update download" max={100} value={updatePercent}/></div>:
+              updateStage==="ready"||updateStage==="installing"?<button className="primary" disabled={updateStage==="installing"} onClick={()=>void installDesktopUpdate()}>{updateStage==="installing"?"Opening setup…":"Install "+updateVersion}</button>:
+              updateInfo?.available?<button className="secondary" onClick={()=>void downloadDesktopUpdate()}>Update to {updateInfo.latest}</button>:
               updateChecked&&!updateBusy&&<p className="muted small" role="status">{updateInfo?.error||(updateInfo?.latest?"You're up to date.":"No update found.")}</p>}
+            {updateError&&<p className="muted small" role="alert">{updateError}</p>}
           </>}
         </div>
       </div>
