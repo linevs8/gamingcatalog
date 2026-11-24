@@ -40,7 +40,8 @@
         ]
       }
     ],
-    "artifactName": "Playquill-${version}-${arch}-${os}.${ext}"
+    "artifactName": "Playquill-${version}-${arch}-${os}.${ext}",
+    "icon": "build/icon.svg"
   },
   "publish": null,
   "nsis": {
