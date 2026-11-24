@@ -134,9 +134,11 @@ export default function GamingHQ() {
           return (j.results||[]) as CatalogGame[];
         }),
         fetch("/api/igdb/search?q="+q,{signal:ctrl.signal}).then(async r=>{
-          const j=await r.json();if(!r.ok||!Array.isArray(j.games))return [] as CatalogGame[];
+          const j=await r.json();
+          if(!r.ok)throw Error(j.error||"IGDB search unavailable");
+          if(!Array.isArray(j.games))throw Error("Invalid IGDB response");
           return j.games.map((v:{providerId:number,title:string,subtitle?:string,coverUrl?:string})=>({
-            id:"gamedb:"+v.providerId,title:v.title,subtitle:v.subtitle||"",
+            id:"igdb:"+v.providerId,title:v.title,subtitle:v.subtitle||"",
             coverUrl:v.coverUrl||"",source:"IGDB",platforms:[]
           })) as CatalogGame[];
         })
@@ -146,7 +148,10 @@ export default function GamingHQ() {
       for(const result of [db,igdb])if(result.status==="fulfilled")
         for(const game of result.value)if(!found.has(game.id))found.set(game.id,game);
       setCatalogResults([...found.values()]);
-      if(!found.size && db.status==="rejected") setCatalogError("Online search unavailable. Use Add manually below — it works without the catalog.");
+      if(!found.size && db.status==="rejected" && igdb.status==="rejected")
+        setCatalogError("Search services unavailable: " + String(igdb.reason instanceof Error ? igdb.reason.message : "network error") + ". You can add manually.");
+      else if(!found.size && db.status==="rejected") setCatalogError("GameDB unavailable; IGDB returned no matches.");
+      else if(!found.size && igdb.status==="rejected") setCatalogError("IGDB unavailable: " + String(igdb.reason instanceof Error ? igdb.reason.message : "network error"));
       setCatalogBusy(false);
     },350);
     return ()=>{window.clearTimeout(t);ctrl.abort();};
@@ -266,7 +271,7 @@ export default function GamingHQ() {
     setModal(null);
   };
   const importCatalogGame = (entry: CatalogGame) => {
-    const igdbId=Number(entry.id.replace(/^gamedb:/,""));
+    const igdbId=Number(entry.id.replace(/^(gamedb|igdb):/,""));
     const existing = data.games.find(g=>g.catalogId===entry.id || (g.provider==="igdb"&&g.providerId===igdbId));
     if (existing) {
       if (modal?.categoryId) toggleMembership(existing.id,modal.categoryId,true);
@@ -1091,7 +1096,7 @@ export default function GamingHQ() {
             {catalogResults.map(entry=><button className="catalog-result" key={entry.id} onClick={()=>importCatalogGame(entry)}>
               {entry.coverUrl?<img src={entry.coverUrl} alt="" loading="lazy"/>:<div className="catalog-cover-fallback"><Gamepad2/></div>}
               <span><strong>{entry.title}</strong><small>{entry.subtitle||"Unspecified platform"}</small></span>
-              {data.games.some(g=>g.catalogId===entry.id || (g.provider==="igdb"&&g.providerId===Number(entry.id.replace(/^gamedb:/,""))))?<span className="muted small">In library</span>:<Plus size={16}/>}
+              {data.games.some(g=>g.catalogId===entry.id || (g.provider==="igdb"&&g.providerId===Number(entry.id.replace(/^(gamedb|igdb):/,""))))?<span className="muted small">In library</span>:<Plus size={16}/>}
             </button>)}
           </div>
           {!catalogBusy&&catalogQuery.trim().length>=2&&!catalogResults.length&&!catalogError&&<p className="muted small">No results. Try another spelling or add manually.</p>}
