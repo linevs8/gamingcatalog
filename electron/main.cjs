@@ -5,11 +5,15 @@ const fs = require("node:fs");
 const net = require("node:net");
 const http = require("node:http");
 const path = require("node:path");
+const os = require("node:os");
 
 const smokeMode = process.argv.includes("--playquill-smoke-test");
 const smokeReportArg = process.argv.find(arg => arg.startsWith("--playquill-smoke-report="));
 const smokeReportFile = smokeReportArg ? smokeReportArg.slice("--playquill-smoke-report=".length) : null;
 const MAX_STARTUP_MS = 60000;
+// A smoke test must never write to the real user library.
+const smokeProfile = smokeMode ? fs.mkdtempSync(path.join(os.tmpdir(), "playquill-ui-test-")) : null;
+if (smokeProfile) app.setPath("userData", smokeProfile);
 
 let server = null;
 let serverExited = false;
@@ -91,7 +95,7 @@ function reportSmoke(result) {
 function fail(error) {
   const message = error instanceof Error ? error.message : String(error);
   log("STARTUP FAILURE: " + message);
-  reportSmoke({ ok: false, error: message, serverExitMessage, logFile });
+  reportSmoke({ ok: false, error: message, serverExitMessage, logFile, smokeProfile });
   if (!smokeMode) dialog.showErrorBox("Playquill couldn't start", message + "\n\nDiagnostic log:\n" + logFile);
   app.exit(1);
 }
@@ -239,7 +243,60 @@ function createWindow() {
     if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isFocused()) mainWindow.webContents.focus();
   });
   mainWindow.on("closed", () => { mainWindow = null; });
-  void mainWindow.loadURL(homeURL + "/");
+  return mainWindow.loadURL(homeURL + "/");
+}
+
+// Exercise the actual packaged renderer and native IPC, not just its HTTP server.
+async function runRendererSmoke() {
+  const wc = mainWindow.webContents;
+  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+  const run = code => wc.executeJavaScript(code, true);
+  const wait = async (description, code, timeout = 12000) => {
+    const until = Date.now() + timeout;
+    while (Date.now() < until) {
+      try { if (await run(code)) return; } catch { /* Renderer may be navigating. */ }
+      await sleep(120);
+    }
+    throw new Error("Renderer smoke test failed: " + description);
+  };
+  const click = async selector => {
+    await wait("click target " + selector, "!!document.querySelector(" + JSON.stringify(selector) + ")");
+    await run("document.querySelector(" + JSON.stringify(selector) + ").click()");
+  };
+  await wait("library loaded", "!document.querySelector('.main-content .loading') && !!document.querySelector('.dashboard-screen')");
+  await click('.nav a[href="/library"]');
+  await wait("All Games screen", "!!document.querySelector('.library-screen .blank-state button.primary')");
+  const search = '.catalog-dialog input[type="search"]';
+  for (const value of ["9", "H"]) {
+    await click(".library-screen .blank-state button.primary");
+    await wait("search has focus", "document.activeElement === document.querySelector(" + JSON.stringify(search) + ")");
+    mainWindow.focus();
+    wc.focus();
+    await wc.insertText(value);
+    await wait("search accepts typing", "document.querySelector(" + JSON.stringify(search) + ")?.value === " + JSON.stringify(value));
+    await run("window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}))");
+    await wait("search closes on Escape", "!document.querySelector('.catalog-dialog')");
+  }
+  await click(".library-screen .blank-state button.primary");
+  await wait("manual add available", "!!document.querySelector('.catalog-dialog .dialog-fields button.secondary')");
+  await click(".catalog-dialog .dialog-fields button.secondary");
+  await wait("manual title input available", "!!document.querySelector('.dialog input[placeholder=\"Game title\"]')");
+  await run("document.querySelector('.dialog input[placeholder=\"Game title\"]').focus()");
+  await wc.insertText("Playquill test game");
+  await wait("title accepts typing", "document.querySelector('.dialog input[placeholder=\"Game title\"]')?.value === 'Playquill test game'");
+  await click(".dialog-footer button.primary");
+  await wait("game visible", "Array.from(document.querySelectorAll('.game-tile-copy strong')).some(e=>e.textContent==='Playquill test game')");
+  const until = Date.now() + 10000;
+  let saved = false;
+  while (Date.now() < until) {
+    try { saved = JSON.parse(fs.readFileSync(dataPath(),"utf8")).games.some(g => g.title === "Playquill test game"); } catch {}
+    if (saved) break;
+    await sleep(150);
+  }
+  if (!saved) throw new Error("Renderer smoke test failed: library file did not persist");
+  await wc.loadURL(homeURL + "/library");
+  await wait("game restored from native storage", "Array.from(document.querySelectorAll('.game-tile-copy strong')).some(e=>e.textContent==='Playquill test game')");
+  return { searchFocus: true, manualAdd: true, nativeSave: true, reloadRestore: true };
 }
 
 if (!app.requestSingleInstanceLock()) {
@@ -261,10 +318,12 @@ if (!app.requestSingleInstanceLock()) {
       log("Local server healthy: " + JSON.stringify(status));
       starting = false;
       if (smokeMode) {
-        reportSmoke({ ok: true, ...status, packaged: app.isPackaged });
+        await createWindow();
+        const ui = await runRendererSmoke();
+        reportSmoke({ ok: true, ...status, ...ui, packaged: app.isPackaged, smokeProfile });
         app.quit();
       } else {
-        createWindow();
+        await createWindow();
       }
     } catch (error) {
       fail(error);
