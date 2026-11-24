@@ -40,6 +40,8 @@ jobs:
       - name: Validate application and launcher
         run: |
           node --check electron/main.cjs
+          node --check electron/updater.cjs
+          node --check electron/preload.cjs
           node --check scripts/prepare-desktop.cjs
           node --check scripts/smoke-windows.cjs
           npm run lint
