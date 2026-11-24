@@ -91,30 +91,32 @@ ipcMain.on("playquill:focus-window", event => {
   if (mainWindow.isFocused() && !mainWindow.webContents.isFocused()) mainWindow.webContents.focus();
 });
 const RELEASES = "https://github.com/linevs8/gamingcatalog/releases";
+const {releaseAsset,latestRelease,downloadAsset,verifyStaged} = require("./updater.cjs");
 let updateCache = null;
 let updateRequest = null;
+let stagedUpdate = null;
+let updateDownloading = false;
+let updateInstalling = false;
+function canUpdate() {
+  return process.platform === "win32" && app.isPackaged && !smokeMode && !process.env.PORTABLE_EXECUTABLE_FILE;
+}
+function requireUpdateSender(event) {
+  if (!validSender(event) || !mainWindow || mainWindow.isDestroyed() || event.sender !== mainWindow.webContents)
+    throw Error("Untrusted update request");
+}
 async function checkForUpdate(force = false) {
   const current = app.getVersion();
   const result = {current, available:false, latest:null, error:null};
-  if (smokeMode || !app.isPackaged) return result;
+  if (!canUpdate()) return {...result,error:process.env.PORTABLE_EXECUTABLE_FILE?"Install the Setup edition to enable in-app updates.":null};
   if (!force && updateCache && Date.now() - updateCache.time < 6*60*60*1000) return updateCache.result;
   if (updateRequest) return updateRequest;
   updateRequest = (async () => {
     try {
-      const response = await fetch("https://api.github.com/repos/linevs8/gamingcatalog/releases/latest",{
-        headers:{"Accept":"application/vnd.github+json","User-Agent":"Playquill/"+current},
-        signal:AbortSignal.timeout(7000), redirect:"error"
-      });
-      if (response.status === 404) return {...result,error:"No published release yet."};
-      if (!response.ok) throw Error("Release check unavailable");
-      const body = await response.json();
-      const parse = s => /^v?(\d+)\.(\d+)\.(\d+)$/.exec(s)?.slice(1).map(Number);
-      const installed = parse(current), newest = parse(body.tag_name);
-      if (!installed || !newest || body.draft || body.prerelease) throw Error("No stable release found");
-      const index = newest.findIndex((part,i)=>part !== installed[i]);
-      const available = index >= 0 && newest[index] > installed[index] &&
-        Array.isArray(body.assets) && body.assets.some(a=>a.name === "Playquill-Setup-"+newest.join(".")+"-x64.exe");
-      const checked = {...result,available,latest:newest.join(".")};
+      const release = await latestRelease(current);
+      if (!release) return {...result,error:"No published release yet."};
+      const asset = releaseAsset(release,current);
+      const tag = typeof release.tag_name === "string" && /^v\d+\.\d+\.\d+$/.test(release.tag_name) ? release.tag_name.slice(1) : null;
+      const checked = {...result,available:!!asset,latest:asset?.latest || tag,error:!asset && tag!==current?"No newer verified installer is available.":null};
       updateCache = {time:Date.now(),result:checked};
       return checked;
     } catch(error) {
@@ -124,8 +126,58 @@ async function checkForUpdate(force = false) {
   try {return await updateRequest;} finally {updateRequest = null;}
 }
 ipcMain.handle("playquill:check-update", (event, force) => {
-  if (!validSender(event)) throw Error("Untrusted update request");
+  requireUpdateSender(event);
   return checkForUpdate(force === true);
+});
+ipcMain.handle("playquill:download-update", async event => {
+  requireUpdateSender(event);
+  if (!canUpdate()) throw Error("In-app updates require the installed Setup edition.");
+  if (updateDownloading || updateInstalling) throw Error("An update is already in progress.");
+  updateDownloading = true;
+  const progress = percent => {
+    if (!event.sender.isDestroyed()) event.sender.send("playquill:update-progress",percent);
+  };
+  try {
+    const asset = releaseAsset(await latestRelease(app.getVersion()),app.getVersion());
+    if (!asset) throw Error("No newer verified installer is available.");
+    if (stagedUpdate?.asset.sha256 === asset.sha256 && await verifyStaged(stagedUpdate)) return {latest:asset.latest};
+    if (stagedUpdate) {
+      await fs.promises.rm(stagedUpdate.root,{recursive:true,force:true}).catch(()=>{});
+      stagedUpdate = null;
+    }
+    // Only versioned installers with a trusted GitHub asset digest may be staged.
+    let lastPercent=-1;
+    stagedUpdate = await downloadAsset(asset,app.getPath("temp"),percent=>{
+      if(percent!==lastPercent){lastPercent=percent;progress(percent);}
+    });
+    return {latest:asset.latest};
+  } finally {updateDownloading = false;}
+});
+ipcMain.handle("playquill:install-update", async event => {
+  requireUpdateSender(event);
+  if (!canUpdate() || updateDownloading || updateInstalling || !stagedUpdate)
+    throw Error("Download an update first.");
+  updateInstalling = true;
+  try {
+    const choice = await dialog.showMessageBox(mainWindow,{
+      type:"warning",title:"Update Playquill",
+      message:"Install Playquill "+stagedUpdate.asset.latest+"?",
+      detail:"Downloaded from the official GitHub release and checked against its SHA-256 digest. This is an unsigned developer build; Windows may show security or installation prompts. Playquill will close during setup. Your local library will be backed up.",
+      buttons:["Install update","Not now"],defaultId:1,cancelId:1,noLink:true
+    });
+    if (choice.response!==0) return false;
+    // Verify again just before opening; never run a modified staged file.
+    if (!await verifyStaged(stagedUpdate)) throw Error("The installer changed after download. Download it again.");
+    const raw = fs.readFileSync(dataPath(),"utf8");
+    if (!validSnapshot(raw)) throw Error("Your library cannot be backed up. Export your library before updating.");
+    const backup = path.join(app.getPath("userData"),"backups","before-update-"+app.getVersion()+".json");
+    if (!fs.existsSync(backup)) atomicWrite(backup,raw);
+    const error = await shell.openPath(stagedUpdate.file);
+    if (error) throw Error("Windows could not open the installer: "+error);
+    // Let the IPC response settle before the normal close/save path runs.
+    setTimeout(()=>app.quit(),250);
+    return true;
+  } finally {updateInstalling=false;}
 });
 ipcMain.handle("playquill:open-releases", event => {
   if (!validSender(event)) throw Error("Untrusted release request");
