@@ -1,0 +1,157 @@
+/* All four palettes share the same geometry and type. The only variation is color.
+   Category accents are independent of theme; covers are never tinted. */
+html body .app-shell.theme-unified {
+  --display-font: Georgia, "Times New Roman", serif;
+  --ui-font: "Segoe UI", system-ui, sans-serif;
+  --danger:#f3a6ae;
+  background:var(--bg); color:var(--text);
+  font-family:var(--ui-font);
+  color-scheme:dark;
+}
+html body .app-shell.theme-unified.theme-midnight, .theme-choice.theme-preview-midnight {
+  --bg:#0a1422; --sidebar:#101e30; --panel:#152537; --panel-2:#1d3046;
+  --border:#344b63; --text:#e9eff8; --muted:#a6b8ce; --accent:#8ebfff;
+  --accent-bg:#234267; --glow:#2c5078; --on-accent:#0b1727;
+}
+html body .app-shell.theme-unified.theme-obsidian, .theme-choice.theme-preview-obsidian {
+  --bg:#0c0d10; --sidebar:#131519; --panel:#1b1e23; --panel-2:#272b32;
+  --border:#3c424b; --text:#f0f1f3; --muted:#aeb3bc; --accent:#c4cbd5;
+  --accent-bg:#303640; --glow:#363b44; --on-accent:#111318;
+}
+html body .app-shell.theme-unified.theme-violet, .theme-choice.theme-preview-violet {
+  --bg:#170f25; --sidebar:#20162f; --panel:#291d3c; --panel-2:#38274d;
+  --border:#55406e; --text:#f3eafa; --muted:#c4b2da; --accent:#d0aaff;
+  --accent-bg:#50346c; --glow:#6a3d92; --on-accent:#21132e;
+}
+html body .app-shell.theme-unified.theme-teal, .theme-choice.theme-preview-teal {
+  --bg:#081d20; --sidebar:#0d282c; --panel:#133236; --panel-2:#1c4347;
+  --border:#346164; --text:#e7f6f2; --muted:#a8cfca; --accent:#79e0cb;
+  --accent-bg:#235950; --glow:#246a65; --on-accent:#082523;
+}
+/* Main shell */
+html body .app-shell.theme-unified .main-shell {
+  background:radial-gradient(ellipse at 65% 0%,color-mix(in srgb,var(--glow) 25%,transparent),transparent 72%),var(--bg);
+  color:var(--text);
+}
+html body .app-shell.theme-unified .sidebar,
+html body .app-shell.theme-unified .sidebar:not(.collapsed) {
+  background:var(--sidebar);border-right:1px solid var(--border);
+}
+html body .app-shell.theme-unified .brand,
+html body .app-shell.theme-unified .sidebar-bottom,
+html body .app-shell.theme-unified .nav-label-categories {border-color:var(--border);}
+html body .app-shell.theme-unified .brand-copy strong {color:var(--text);}
+html body .app-shell.theme-unified .topbar {height:44px;padding:0 24px;background:var(--sidebar);border-bottom:1px solid var(--border);box-shadow:none;}
+html body .app-shell.theme-unified .topbar .icon-button,
+html body .app-shell.theme-unified .sidebar-collapse,
+html body .app-shell.theme-unified .side-disclose,
+html body .app-shell.theme-unified .icon-button {color:var(--muted);}
+html body .app-shell.theme-unified .topbar .icon-button:hover,
+html body .app-shell.theme-unified .sidebar-collapse:hover,
+html body .app-shell.theme-unified .icon-button:hover:not(:disabled) {color:var(--text);background:var(--panel-2);}
+html body .app-shell.theme-unified .nav {padding:18px 12px 12px;}
+html body .app-shell.theme-unified .nav-item {font:500 14px/1.3 var(--ui-font);min-height:43px;padding:10px 14px;gap:12px;color:var(--muted);}
+html body .app-shell.theme-unified .nav-item svg {color:var(--muted);width:18px;height:18px;}
+html body .app-shell.theme-unified .nav-item.nav-active {background:var(--accent-bg);color:var(--text);box-shadow:inset 2px 0 var(--accent);}
+html body .app-shell.theme-unified .nav-item.nav-active svg,
+html body .app-shell.theme-unified .nav-label-categories button {color:var(--accent);}
+html body .app-shell.theme-unified .nav-item:hover:not(.nav-active),
+html body .app-shell.theme-unified .side-category-label:hover,
+html body .app-shell.theme-unified .side-game:hover {background:var(--panel-2);color:var(--text);}
+html body .app-shell.theme-unified .nav-label {font:650 11px/1.2 var(--ui-font);letter-spacing:1.5px;color:var(--muted);}
+html body .app-shell.theme-unified .side-category-label {font:500 13px/1.3 var(--ui-font);color:var(--text);gap:10px;padding:10px;}
+html body .app-shell.theme-unified .side-category-label span[style] svg {color:var(--category-accent,var(--accent));}
+html body .app-shell.theme-unified .side-game > button,
+html body .app-shell.theme-unified .nav-empty {color:var(--muted);}
+html body .app-shell.theme-unified .side-sublist {border-color:var(--border);}
+html body .app-shell.theme-unified .local-dot {background:#79b79a;}
+html body .app-shell.theme-unified .local-dot.saving {background:#d8b06a;}
+html body .app-shell.theme-unified .local-dot.error {background:var(--danger);}
+/* Same type, dimensions and header flow regardless of color. */
+html body .app-shell.theme-unified .main-content {margin:0;max-width:none;padding:28px 32px 70px;}
+html body .app-shell.theme-unified .screen > .page-top {margin-bottom:24px;align-items:center;}
+html body .app-shell.theme-unified .page-top h1,
+html body .app-shell.theme-unified .screen .page-top h1 {font:500 clamp(29px,3vw,40px)/1.15 var(--display-font);letter-spacing:-.8px;color:var(--text);}
+html body .app-shell.theme-unified .dashboard-screen .page-top > div {flex:0 1 auto;gap:10px;}
+html body .app-shell.theme-unified .dashboard-screen .page-top > div:after {content:none;display:none;}
+html body .app-shell.theme-unified .dashboard-screen .page-top .dashboard-actions {margin-left:auto;justify-content:flex-end;}
+html body .app-shell.theme-unified .primary {
+  background:var(--accent-bg)!important;border:1px solid color-mix(in srgb,var(--accent) 55%,var(--border));
+  color:var(--text);font:600 13px/1.2 var(--ui-font);border-radius:7px;min-height:36px;padding:8px 13px;box-shadow:none!important;
+}
+html body .app-shell.theme-unified .primary svg {color:var(--accent);}
+html body .app-shell.theme-unified .primary:hover {
+  background:color-mix(in srgb,var(--accent) 28%,var(--panel))!important;border-color:var(--accent);color:var(--text);
+}
+html body .app-shell.theme-unified .secondary {
+  background:var(--panel);color:var(--text);border-color:var(--border);border-radius:7px;
+}
+html body .app-shell.theme-unified .secondary:hover {background:var(--panel-2);border-color:var(--accent);color:var(--text);}
+html body .app-shell.theme-unified .category-screen .page-top .primary {
+  background:color-mix(in srgb,var(--category-accent,var(--accent)) 23%,var(--panel))!important;
+  border-color:color-mix(in srgb,var(--category-accent,var(--accent)) 65%,var(--border));
+}
+html body .app-shell.theme-unified .category-screen .page-top .primary svg {color:var(--category-accent,var(--accent));}
+/* Artwork and notebook chrome */
+html body .app-shell.theme-unified .dashboard-screen .category-head h2 {font-family:var(--display-font);}
+html body .app-shell.theme-unified .dashboard-screen .category-head .small {font-family:var(--ui-font);color:var(--muted);}
+html body .app-shell.theme-unified .dashboard-screen .preview-covers .cover {background:var(--panel-2);border-color:var(--border);aspect-ratio:3/4;}
+html body .app-shell.theme-unified .games-grid .game-tile-copy strong {color:var(--text);}
+html body .app-shell.theme-unified .cover {background:var(--panel-2);border-color:var(--border);}
+html body .app-shell.theme-unified .cover-placeholder {background:var(--panel-2);color:var(--muted);}
+html body .app-shell.theme-unified .search,
+html body .app-shell.theme-unified .segment,
+html body .app-shell.theme-unified .game-row,
+html body .app-shell.theme-unified .shelf-card,
+html body .app-shell.theme-unified .rich-editor,
+html body .app-shell.theme-unified .note-history-list,
+html body .app-shell.theme-unified .library-menu {background:var(--panel);border-color:var(--border);color:var(--text);}
+html body .app-shell.theme-unified .search:focus-within {border-color:var(--accent);}
+html body .app-shell.theme-unified .search input {color:var(--text);}
+html body .app-shell.theme-unified .segment button.selected,
+html body .app-shell.theme-unified .note-page-tabs button.selected {background:var(--accent-bg);border-color:var(--border);color:var(--text);}
+html body .app-shell.theme-unified .workspace-intro h1,
+html body .app-shell.theme-unified .section-head h2 {font-family:var(--display-font);color:var(--text);}
+html body .app-shell.theme-unified .editor-toolbar {background:var(--panel-2);border-color:var(--border);}
+html body .app-shell.theme-unified .editor-tool {color:var(--muted);}
+html body .app-shell.theme-unified .editor-tool:hover,
+html body .app-shell.theme-unified .editor-tool.active {background:var(--accent-bg);color:var(--text);}
+html body .app-shell.theme-unified .rich-content {color:var(--text);}
+html body .app-shell.theme-unified .note-page-tabs,
+html body .app-shell.theme-unified .shelf-heading {border-color:var(--border);}
+html body .app-shell.theme-unified .chip,
+html body .app-shell.theme-unified .quick-link {background:var(--panel-2);border-color:var(--border);color:var(--muted);}
+html body .app-shell.theme-unified .quick-link > a {color:var(--text);}
+html body .app-shell.theme-unified .shelf-category {background:color-mix(in srgb,var(--category-accent,var(--accent)) 8%,var(--panel));}
+html body .app-shell.theme-unified .dialog {background:var(--panel);border-color:var(--border);color:var(--text);}
+html body .app-shell.theme-unified .dialog-fields > label {color:var(--text);}
+html body .app-shell.theme-unified .dialog input:not([type=checkbox]),
+html body .app-shell.theme-unified .dialog select,
+html body .app-shell.theme-unified .dialog textarea,
+html body .app-shell.theme-unified .editor-color select {background:var(--bg);color:var(--text);border-color:var(--border);}
+html body .app-shell.theme-unified .dialog input:focus,
+html body .app-shell.theme-unified .dialog select:focus,
+html body .app-shell.theme-unified .dialog textarea:focus {border-color:var(--accent);}
+html body .app-shell.theme-unified .catalog-result,
+html body .app-shell.theme-unified .library-picker-item,
+html body .app-shell.theme-unified .organize-checks label {background:var(--panel-2);border-color:var(--border);color:var(--text);}
+html body .app-shell.theme-unified .catalog-result:hover,
+html body .app-shell.theme-unified .library-picker-item:hover {background:var(--accent-bg);border-color:var(--accent);}
+html body .app-shell.theme-unified .dialog-separator {background:var(--border);}
+html body .app-shell.theme-unified .undo-toast {background:var(--panel-2);border-color:var(--border);color:var(--text);}
+html body .app-shell.theme-unified .drop-target-active {outline-color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,transparent);}
+html body .app-shell.theme-unified .drag-shelf-targets,
+html body .app-shell.theme-unified .sidebar-drop {background:var(--panel);}
+html body .app-shell.theme-unified ::-webkit-scrollbar-thumb {background:color-mix(in srgb,var(--accent) 25%,var(--border));background-clip:padding-box;}
+html body .app-shell.theme-unified input[type=checkbox] {accent-color:var(--accent);}
+/* Actual palette preview, not a generic gray line. */
+html body .app-shell.theme-unified .theme-choice {background:var(--panel);border:1px solid var(--border);color:var(--text);min-height:84px;gap:9px;}
+html body .app-shell.theme-unified .theme-choice.chosen {outline:2px solid var(--accent);outline-offset:2px;}
+html body .app-shell.theme-unified .theme-preview-bar {width:100%;height:23px;display:grid;grid-template-columns:25% 1fr 18%;gap:3px;border-radius:5px;background:var(--bg);padding:3px;overflow:hidden;}
+html body .app-shell.theme-unified .theme-preview-bar i {display:block;border-radius:3px;background:var(--panel-2);}
+html body .app-shell.theme-unified .theme-preview-bar i:first-child {background:var(--sidebar);border:1px solid var(--border);}
+html body .app-shell.theme-unified .theme-preview-bar i:last-child {background:var(--accent);}
+@media(max-width:760px) {
+  html body .app-shell.theme-unified .main-content {padding:20px 15px 55px;}
+  html body .app-shell.theme-unified .topbar {padding:0 12px;}
+}
