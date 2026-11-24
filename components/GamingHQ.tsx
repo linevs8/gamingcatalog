@@ -1156,7 +1156,7 @@ export default function GamingHQ() {
           <div className="theme-grid">
             {([["midnight","Midnight Blue"],["obsidian","Obsidian"],["violet","Dusk Violet"],["teal","Deep Teal"]] as [ThemeName,string][]).map(([id,label])=>
               <button className={"theme-choice theme-preview-"+id+((data.theme||"midnight")===id?" chosen":"")}
-                key={id} onClick={()=>change(d=>({...d,theme:id}))}>
+                key={id} aria-pressed={(data.theme||"midnight")===id} onClick={()=>change(d=>({...d,theme:id}))}>
                 <span className="theme-preview-bar" aria-hidden="true"><i/><i/><i/></span><strong>{label}</strong>
                 {(data.theme||"midnight")===id&&<Check size={15}/>}
               </button>)}
